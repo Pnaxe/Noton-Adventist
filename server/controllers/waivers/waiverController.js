@@ -492,92 +492,286 @@ class WaiverController {
 
   // Get all waivers (admin view)
   async getAllWaivers(req, res) {
+    const conn = await pool.getConnection();
     try {
-      const { page = 1, limit = 50, start_date, end_date, category_id, term, academic_year, search } = req.query;
-      const offset = (page - 1) * limit;
+      const { page = 1, limit = 25, start_date, end_date, category_id, term, academic_year, search } = req.query;
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const offset = (pageNum - 1) * limitNum;
 
-      let whereClause = 'WHERE st.description LIKE "%Fee Waiver%"';
-      let params = [];
+      // Build WHERE clause for filtering
+      let whereConditions = ['w.status = "Active"'];
+      let queryParams = [];
 
       if (start_date) {
-        whereClause += ' AND DATE(st.transaction_date) >= ?';
-        params.push(start_date);
+        whereConditions.push('DATE(w.granted_date) >= ?');
+        queryParams.push(start_date);
       }
 
       if (end_date) {
-        whereClause += ' AND DATE(st.transaction_date) <= ?';
-        params.push(end_date);
+        whereConditions.push('DATE(w.granted_date) <= ?');
+        queryParams.push(end_date);
       }
 
       if (category_id) {
-        whereClause += ' AND st.description LIKE ?';
-        params.push(`%${category_id}%`);
+        whereConditions.push('w.category_id = ?');
+        queryParams.push(category_id);
       }
 
       if (term) {
-        whereClause += ' AND st.term = ?';
-        params.push(term);
+        whereConditions.push('w.term = ?');
+        queryParams.push(term);
       }
 
       if (academic_year) {
-        whereClause += ' AND st.academic_year = ?';
-        params.push(academic_year);
+        whereConditions.push('w.academic_year = ?');
+        queryParams.push(academic_year);
       }
 
       if (search) {
-        whereClause += ' AND (s.Name LIKE ? OR s.Surname LIKE ? OR st.student_reg_number LIKE ?)';
+        whereConditions.push('(s.Name LIKE ? OR s.Surname LIKE ? OR w.student_reg_number LIKE ?)');
         const searchTerm = `%${search}%`;
-        params.push(searchTerm, searchTerm, searchTerm);
+        queryParams.push(searchTerm, searchTerm, searchTerm);
       }
 
+      const whereClause = whereConditions.join(' AND ');
+
       // Get total count
-      const [countResult] = await pool.execute(`
+      const [countResult] = await conn.query(`
         SELECT COUNT(*) as total 
-        FROM student_transactions st 
-        ${whereClause}
-      `, params);
+        FROM waivers w
+        LEFT JOIN students s ON w.student_reg_number = s.RegNumber
+        WHERE ${whereClause}
+      `, queryParams);
 
       const totalRecords = countResult[0].total;
+      const totalPages = Math.ceil(totalRecords / limitNum);
 
-      // Get waivers
-      const [waivers] = await pool.execute(`
+      // Get waivers with pagination
+      const finalParams = [...queryParams, limitNum, offset];
+      const [waivers] = await conn.query(`
         SELECT 
-          st.id,
-          st.student_reg_number,
+          w.id,
+          w.student_reg_number,
           s.Name,
           s.Surname,
-          st.amount as waiver_amount,
-          st.description,
-          st.term,
-          st.academic_year,
-          st.transaction_date,
-          st.created_at,
-          u.username as created_by
-        FROM student_transactions st
-        LEFT JOIN students s ON st.student_reg_number = s.RegNumber
-        LEFT JOIN users u ON st.created_by = u.id
-        ${whereClause}
-        ORDER BY st.transaction_date DESC
-        LIMIT ${parseInt(limit)} OFFSET ${parseInt(offset)}
-      `, params);
+          w.waiver_amount,
+          w.currency_id,
+          c.symbol as currency_symbol,
+          c.name as currency_name,
+          w.waiver_type,
+          w.reason,
+          w.notes,
+          w.term,
+          w.academic_year,
+          w.granted_date,
+          w.status,
+          w.created_at,
+          wc.category_name,
+          wc.description as category_description,
+          u.username as granted_by_username
+        FROM waivers w
+        LEFT JOIN students s ON w.student_reg_number = s.RegNumber
+        LEFT JOIN waiver_categories wc ON w.category_id = wc.id
+        LEFT JOIN currencies c ON w.currency_id = c.id
+        LEFT JOIN users u ON w.granted_by = u.id
+        WHERE ${whereClause}
+        ORDER BY w.granted_date DESC, w.id DESC
+        LIMIT ? OFFSET ?
+      `, finalParams);
+
+      conn.release();
 
       res.json({
         success: true,
         data: {
           waivers,
           pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
+            page: pageNum,
+            limit: limitNum,
             total: totalRecords,
-            totalPages: Math.ceil(totalRecords / limit)
+            totalPages: totalPages,
+            hasNext: pageNum < totalPages,
+            hasPrev: pageNum > 1
           }
         }
       });
     } catch (error) {
+      conn.release();
       console.error('Error fetching all waivers:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch waivers'
+        message: 'Failed to fetch waivers',
+        error: error.message
+      });
+    }
+  }
+
+  // Get waiver by ID
+  async getWaiverById(req, res) {
+    const conn = await pool.getConnection();
+    try {
+      const { id } = req.params;
+
+      const [waivers] = await conn.query(`
+        SELECT 
+          w.*,
+          s.Name as student_name,
+          s.Surname as student_surname,
+          c.symbol as currency_symbol,
+          c.name as currency_name,
+          wc.category_name,
+          wc.description as category_description,
+          u.username as granted_by_username
+        FROM waivers w
+        LEFT JOIN students s ON w.student_reg_number = s.RegNumber
+        LEFT JOIN waiver_categories wc ON w.category_id = wc.id
+        LEFT JOIN currencies c ON w.currency_id = c.id
+        LEFT JOIN users u ON w.granted_by = u.id
+        WHERE w.id = ?
+      `, [id]);
+
+      conn.release();
+
+      if (waivers.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Waiver not found'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: waivers[0]
+      });
+    } catch (error) {
+      conn.release();
+      console.error('Error fetching waiver:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch waiver',
+        error: error.message
+      });
+    }
+  }
+
+  // Update waiver
+  async updateWaiver(req, res) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const { id } = req.params;
+      const { waiver_amount, reason, notes, term, academic_year, status } = req.body;
+
+      // Get existing waiver
+      const [existingWaivers] = await conn.query('SELECT * FROM waivers WHERE id = ?', [id]);
+      if (existingWaivers.length === 0) {
+        await conn.rollback();
+        conn.release();
+        return res.status(404).json({
+          success: false,
+          message: 'Waiver not found'
+        });
+      }
+
+      const existingWaiver = existingWaivers[0];
+
+      // Update waiver
+      await conn.query(`
+        UPDATE waivers 
+        SET waiver_amount = ?,
+            reason = ?,
+            notes = ?,
+            term = ?,
+            academic_year = ?,
+            status = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [
+        waiver_amount !== undefined ? waiver_amount : existingWaiver.waiver_amount,
+        reason !== undefined ? reason : existingWaiver.reason,
+        notes !== undefined ? notes : existingWaiver.notes,
+        term !== undefined ? term : existingWaiver.term,
+        academic_year !== undefined ? academic_year : existingWaiver.academic_year,
+        status !== undefined ? status : existingWaiver.status,
+        id
+      ]);
+
+      await conn.commit();
+      conn.release();
+
+      res.json({
+        success: true,
+        message: 'Waiver updated successfully'
+      });
+    } catch (error) {
+      await conn.rollback();
+      conn.release();
+      console.error('Error updating waiver:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update waiver',
+        error: error.message
+      });
+    }
+  }
+
+  // Delete/Reverse waiver
+  async deleteWaiver(req, res) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const { id } = req.params;
+      const { reversal_reason } = req.body;
+
+      // Get existing waiver
+      const [existingWaivers] = await conn.query('SELECT * FROM waivers WHERE id = ?', [id]);
+      if (existingWaivers.length === 0) {
+        await conn.rollback();
+        conn.release();
+        return res.status(404).json({
+          success: false,
+          message: 'Waiver not found'
+        });
+      }
+
+      const existingWaiver = existingWaivers[0];
+
+      if (existingWaiver.status === 'Reversed') {
+        await conn.rollback();
+        conn.release();
+        return res.status(400).json({
+          success: false,
+          message: 'Waiver has already been reversed'
+        });
+      }
+
+      // Update waiver status to Reversed
+      await conn.query(`
+        UPDATE waivers 
+        SET status = 'Reversed',
+            reversal_reason = ?,
+            reversed_at = CURRENT_TIMESTAMP,
+            reversed_by = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `, [reversal_reason || 'Reversed by administrator', req.user.id, id]);
+
+      await conn.commit();
+      conn.release();
+
+      res.json({
+        success: true,
+        message: 'Waiver reversed successfully'
+      });
+    } catch (error) {
+      await conn.rollback();
+      conn.release();
+      console.error('Error reversing waiver:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to reverse waiver',
+        error: error.message
       });
     }
   }

@@ -63,11 +63,6 @@ import ExpenseAnalysis from './pages/reports/ExpenseAnalysis';
 import RevenueAnalysis from './pages/reports/RevenueAnalysis';
 import StudentFinancialAnalytics from './pages/reports/StudentFinancialAnalytics';
 import StudentResultsAnalytics from './pages/reports/StudentResultsAnalytics';
-// Procurement Pages
-import Procurement from './pages/procurement/Procurement';
-import PurchaseRequests from './pages/procurement/PurchaseRequests';
-import ProcurementSuppliers from './pages/procurement/Suppliers';
-import PurchaseOrders from './pages/procurement/PurchaseOrders';
 // Payroll Pages
 import Payroll from './pages/payroll/Payroll';
 import Payslips from './pages/payroll/Payslips';
@@ -108,7 +103,12 @@ import AssetTypesConfig from './pages/assets/AssetTypesConfig';
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true
+        }}
+      >
         <AppRoutes />
       </BrowserRouter>
     </AuthProvider>
@@ -206,12 +206,6 @@ function AppRoutes() {
         <Route path="analytics/revenue-analysis" element={<RevenueAnalysis />} />
         <Route path="analytics/student-financial-analytics" element={<StudentFinancialAnalytics />} />
         <Route path="analytics/student-results-analytics" element={<StudentResultsAnalytics />} />
-
-        {/* Procurement Routes */}
-        <Route path="procurement" element={<Procurement />} />
-        <Route path="procurement/purchase-requests" element={<PurchaseRequests />} />
-        <Route path="procurement/suppliers" element={<ProcurementSuppliers />} />
-        <Route path="procurement/purchase-orders" element={<PurchaseOrders />} />
 
         {/* Payroll Routes */}
         <Route path="payroll" element={<Payroll />} />

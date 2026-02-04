@@ -181,12 +181,7 @@ class StreamController {
                 [id]
             );
             
-            const [studentRefs] = await pool.execute(
-                'SELECT COUNT(*) as count FROM students WHERE stream_id = ?',
-                [id]
-            );
-            
-            if (gradelevelRefs[0].count > 0 || subjectClassRefs[0].count > 0 || studentRefs[0].count > 0) {
+            if (gradelevelRefs[0].count > 0 || subjectClassRefs[0].count > 0) {
                 return res.status(400).json({ 
                     success: false, 
                     message: 'Cannot delete stream. It is referenced by other records.' 
@@ -218,6 +213,62 @@ class StreamController {
         } catch (error) {
             console.error('Error deleting stream:', error);
             res.status(500).json({ success: false, message: 'Failed to delete stream' });
+        }
+    }
+
+    // Delete all streams that are not in use (not referenced by gradelevel_classes, subject_classes, or students)
+    async clearUnusedStreams(req, res) {
+        try {
+            const [streams] = await pool.execute('SELECT id, name, stage FROM stream ORDER BY id');
+            if (streams.length === 0) {
+                return res.json({
+                    success: true,
+                    message: 'No streams to clear.',
+                    data: { deleted: 0, skipped: 0, skippedNames: [] }
+                });
+            }
+
+            let deleted = 0;
+            const skippedNames = [];
+
+            for (const stream of streams) {
+                const [gradelevelRefs] = await pool.execute(
+                    'SELECT COUNT(*) as count FROM gradelevel_classes WHERE stream_id = ?',
+                    [stream.id]
+                );
+                const [subjectClassRefs] = await pool.execute(
+                    'SELECT COUNT(*) as count FROM subject_classes WHERE stream_id = ?',
+                    [stream.id]
+                );
+
+                if (gradelevelRefs[0].count > 0 || subjectClassRefs[0].count > 0) {
+                    skippedNames.push(stream.name);
+                    continue;
+                }
+
+                await pool.execute('DELETE FROM stream WHERE id = ?', [stream.id]);
+                await AuditLogger.log({
+                    userId: req.user?.id ?? null,
+                    action: 'DELETE',
+                    tableName: 'stream',
+                    recordId: stream.id,
+                    oldValues: { name: stream.name, stage: stream.stage }
+                });
+                deleted++;
+            }
+
+            res.json({
+                success: true,
+                message: deleted > 0
+                    ? `Cleared ${deleted} stream(s).${skippedNames.length > 0 ? ` ${skippedNames.length} stream(s) in use were kept.` : ''}`
+                    : skippedNames.length > 0
+                        ? 'No streams could be cleared; all are in use.'
+                        : 'No streams to clear.',
+                data: { deleted, skipped: skippedNames.length, skippedNames }
+            });
+        } catch (error) {
+            console.error('Error clearing streams:', error);
+            res.status(500).json({ success: false, message: 'Failed to clear streams' });
         }
     }
 

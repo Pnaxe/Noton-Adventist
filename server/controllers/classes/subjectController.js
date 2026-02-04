@@ -57,49 +57,58 @@ class SubjectController {
     // Create new subject
     async createSubject(req, res) {
         try {
-            const { code, name, syllabus } = req.body;
-            
+            const body = req.body || {};
+            const code = (typeof body.code === 'string' ? body.code : String(body.code || '')).trim();
+            const name = (typeof body.name === 'string' ? body.name : String(body.name || '')).trim();
+            const syllabus = typeof body.syllabus === 'string' ? (body.syllabus.trim() || null) : null;
+
             if (!code || !name) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Code and name are required' 
+                const msg = 'Code and name are required';
+                console.warn('Create subject 400:', msg, { received: { code: body.code, name: body.name } });
+                return res.status(400).json({
+                    success: false,
+                    message: msg
                 });
             }
-            
+
             // Check if subject code already exists
             const [existingCode] = await pool.execute(
                 'SELECT id FROM subjects WHERE code = ?',
                 [code]
             );
-            
+
             if (existingCode.length > 0) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Subject code already exists' 
+                const msg = 'Subject code already exists';
+                console.warn('Create subject 400:', msg, { code });
+                return res.status(400).json({
+                    success: false,
+                    message: msg
                 });
             }
-            
+
             // Check if subject name already exists
             const [existingName] = await pool.execute(
                 'SELECT id FROM subjects WHERE name = ?',
                 [name]
             );
-            
+
             if (existingName.length > 0) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: 'Subject name already exists' 
+                const msg = 'Subject name already exists';
+                console.warn('Create subject 400:', msg, { name });
+                return res.status(400).json({
+                    success: false,
+                    message: msg
                 });
             }
             
             const [result] = await pool.execute(
                 'INSERT INTO subjects (code, name, syllabus) VALUES (?, ?, ?)',
-                [code, name, syllabus || null]
+                [code, name, syllabus]
             );
-            
+
             // Log audit event
             await AuditLogger.log({
-                userId: req.user.id,
+                userId: req.user?.id ?? null,
                 action: 'CREATE',
                 tableName: 'subjects',
                 recordId: result.insertId,

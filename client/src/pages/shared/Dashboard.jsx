@@ -19,9 +19,11 @@ const Dashboard = () => {
     activeClasses: 0,
     totalEmployees: 0,
     pendingPayments: 0,
+    pendingPaymentsAmount: 0,
     outstandingBalances: 0,
     monthlyRevenue: 0,
-    monthlyExpenses: 0
+    monthlyExpenses: 0,
+    totalCollectedFees: 0
   });
   const [revenueTrends, setRevenueTrends] = useState([]);
   const [paymentStats, setPaymentStats] = useState([]);
@@ -96,17 +98,27 @@ const Dashboard = () => {
       // Fetch revenue analytics and calculate change
       let monthlyRevenue = 0;
       let revenueTrendsData = [];
+      let totalRevenueFromPayments = 0;
+
+      // First, try to get revenue from actual payments (more accurate)
       try {
         const currentYear = new Date().getFullYear();
-        const revenueRes = await axios.get(`${BASE_URL}/analytics/revenue/trends?year=${currentYear}&period=monthly`, { headers: authHeaders });
-        if (revenueRes.data.data?.trends) {
-          revenueTrendsData = revenueRes.data.data.trends;
-          const currentMonth = new Date().getMonth() + 1;
-          const currentMonthData = revenueTrendsData.find(t => (Number(t.month) === currentMonth || Number(t.period) === currentMonth));
-          const prevMonthData = revenueTrendsData.find(t => (Number(t.month) === (currentMonth - 1) || Number(t.period) === (currentMonth - 1)));
+        const currentMonth = new Date().getMonth() + 1;
 
-          monthlyRevenue = currentMonthData?.total_revenue || 0;
-          const prevRevenue = prevMonthData?.total_revenue || 0;
+        // Fetch fee collection trends (from actual payments)
+        const feeCollectionRes = await axios.get(`${BASE_URL}/analytics/revenue/fee-collection-trends?year=${currentYear}`, { headers: authHeaders });
+        if (feeCollectionRes.data.data?.trends && feeCollectionRes.data.data.trends.length > 0) {
+          const feeTrends = feeCollectionRes.data.data.trends;
+
+          // Calculate total revenue from all payments this year
+          totalRevenueFromPayments = feeTrends.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+
+          // Get current month revenue
+          const currentMonthData = feeTrends.find(t => Number(t.month) === currentMonth);
+          const prevMonthData = feeTrends.find(t => Number(t.month) === (currentMonth === 1 ? 12 : currentMonth - 1) && (currentMonth === 1 ? Number(t.year) === currentYear - 1 : Number(t.year) === currentYear));
+
+          monthlyRevenue = currentMonthData ? (parseFloat(currentMonthData.total) || 0) : 0;
+          const prevRevenue = prevMonthData ? (parseFloat(prevMonthData.total) || 0) : 0;
 
           if (prevRevenue > 0) {
             const diff = Number(monthlyRevenue) - Number(prevRevenue);
@@ -117,10 +129,51 @@ const Dashboard = () => {
             };
           } else if (currentMonth === 1) {
             revenueChanges = { value: "New Year", type: 'increase' };
+          } else if (monthlyRevenue > 0) {
+            revenueChanges = { value: "New month", type: 'increase' };
           }
+
+          // Convert fee trends to revenue trends format for charts
+          revenueTrendsData = feeTrends.map(trend => ({
+            period: trend.period_label,
+            period_label: trend.period_label,
+            month: trend.month,
+            total_revenue: parseFloat(trend.total) || 0,
+            transaction_count: 0
+          }));
         }
       } catch (err) {
-        console.log('Revenue trends not available');
+        console.log('Fee collection trends not available, trying journal entries:', err.message);
+
+        // Fallback to journal entries if payment data not available
+        try {
+          const currentYear = new Date().getFullYear();
+          const revenueRes = await axios.get(`${BASE_URL}/analytics/revenue/trends?year=${currentYear}&period=monthly`, { headers: authHeaders });
+          if (revenueRes.data.data?.trends) {
+            revenueTrendsData = revenueRes.data.data.trends;
+            const currentMonth = new Date().getMonth() + 1;
+            const currentMonthData = revenueTrendsData.find(t => (Number(t.month) === currentMonth || Number(t.period) === currentMonth));
+            const prevMonthData = revenueTrendsData.find(t => (Number(t.month) === (currentMonth - 1) || Number(t.period) === (currentMonth - 1)));
+
+            monthlyRevenue = currentMonthData?.total_revenue || 0;
+            const prevRevenue = prevMonthData?.total_revenue || 0;
+
+            if (prevRevenue > 0) {
+              const diff = Number(monthlyRevenue) - Number(prevRevenue);
+              const percent = ((Math.abs(diff) / Number(prevRevenue)) * 100).toFixed(0);
+              revenueChanges = {
+                value: `${percent}% from last month`,
+                type: diff >= 0 ? 'increase' : 'decrease'
+              };
+            } else if (currentMonth === 1) {
+              revenueChanges = { value: "New Year", type: 'increase' };
+            }
+
+            totalRevenueFromPayments = revenueTrendsData.reduce((sum, item) => sum + (item.total_revenue || 0), 0);
+          }
+        } catch (err2) {
+          console.log('Revenue trends not available:', err2.message);
+        }
       }
 
       // Fetch student balances and calculate health trend
@@ -150,26 +203,43 @@ const Dashboard = () => {
         console.log('Finance health summary not available');
       }
 
-      // Fetch payment statistics (last 6 months)
+      // Fetch payment statistics (last 6 months) and calculate total collections
       let paymentStatsData = [];
+      let totalCollectedFromPayments = 0;
       try {
-        const paymentsRes = await axios.get(`${BASE_URL}/fees/all-payments?page=1&limit=100`, { headers: authHeaders });
+        // Try to get all completed payments for the current year
+        const currentYear = new Date().getFullYear();
+        const paymentsRes = await axios.get(`${BASE_URL}/fees/all-payments?page=1&limit=10000`, { headers: authHeaders });
         if (paymentsRes.data.data) {
           const payments = paymentsRes.data.data;
+
+          // Filter completed payments for current year
+          const currentYearPayments = payments.filter(payment => {
+            const paymentDate = new Date(payment.PaymentDate || payment.payment_date || payment.created_at);
+            return paymentDate.getFullYear() === currentYear &&
+              (payment.status === 'completed' || payment.Status === 'completed' || !payment.status);
+          });
+
+          // Calculate total collected from completed payments
+          totalCollectedFromPayments = currentYearPayments.reduce((sum, payment) => {
+            return sum + (parseFloat(payment.Amount || payment.amount || payment.base_currency_amount || 0));
+          }, 0);
+
+          // Group by month for chart
           const monthlyPayments = {};
-          payments.forEach(payment => {
-            const date = new Date(payment.PaymentDate || payment.created_at);
+          currentYearPayments.forEach(payment => {
+            const date = new Date(payment.PaymentDate || payment.payment_date || payment.created_at);
             const month = date.toLocaleString('default', { month: 'short' });
             if (!monthlyPayments[month]) {
               monthlyPayments[month] = { month, amount: 0, count: 0 };
             }
-            monthlyPayments[month].amount += parseFloat(payment.Amount || payment.amount || 0);
+            monthlyPayments[month].amount += parseFloat(payment.Amount || payment.amount || payment.base_currency_amount || 0);
             monthlyPayments[month].count += 1;
           });
           paymentStatsData = Object.values(monthlyPayments).slice(-6);
         }
       } catch (err) {
-        console.log('Payment stats not available');
+        console.log('Payment stats not available:', err.message);
       }
 
       // Try to fetch expense trends
@@ -260,6 +330,8 @@ const Dashboard = () => {
       // Fetch fee collection efficiency metrics for pending and total collections
       let pendingPayments = 0;
       let totalCollectedFees = 0;
+      let pendingPaymentsAmount = 0;
+
       try {
         const efficiencyRes = await axios.get(`${BASE_URL}/analytics/student-finance/efficiency-metrics`, { headers: authHeaders });
         if (efficiencyRes.data.data) {
@@ -271,8 +343,85 @@ const Dashboard = () => {
         console.log('Efficiency metrics not available');
       }
 
-      // Summarize metrics
-      const totalRevenue = revenueTrendsData.reduce((sum, item) => sum + (item.total_revenue || 0), 0);
+      // Fetch actual pending payments amount from payment tables
+      try {
+        // Get all fee payments and filter for pending
+        const allFeePaymentsRes = await axios.get(`${BASE_URL}/fees/all-payments?page=1&limit=10000`, { headers: authHeaders });
+        if (allFeePaymentsRes.data.data) {
+          const allPayments = allFeePaymentsRes.data.data;
+          const pendingPaymentsList = allPayments.filter(payment =>
+            (payment.status === 'pending' || payment.Status === 'pending') &&
+            (payment.status !== 'completed' && payment.Status !== 'completed')
+          );
+          pendingPaymentsAmount = pendingPaymentsList.reduce((sum, payment) => {
+            return sum + (parseFloat(payment.Amount || payment.amount || payment.base_currency_amount || 0));
+          }, 0);
+        }
+      } catch (err) {
+        console.log('Pending payments fetch failed:', err.message);
+      }
+
+      // Also get pending boarding payments
+      try {
+        const boardingPaymentsRes = await axios.get(`${BASE_URL}/boarding/payments?page=1&limit=10000`, { headers: authHeaders });
+        if (boardingPaymentsRes.data.data) {
+          const boardingPayments = boardingPaymentsRes.data.data;
+          const pendingBoardingPayments = boardingPayments.filter(payment =>
+            payment.status === 'pending'
+          );
+          const pendingBoardingAmount = pendingBoardingPayments.reduce((sum, payment) => {
+            return sum + (parseFloat(payment.base_currency_amount || payment.amount || 0));
+          }, 0);
+          pendingPaymentsAmount += pendingBoardingAmount;
+        }
+      } catch (err) {
+        console.log('Pending boarding payments fetch failed:', err.message);
+      }
+
+      // Use total collected from payments if available (more accurate)
+      if (totalCollectedFromPayments > 0) {
+        totalCollectedFees = totalCollectedFromPayments;
+      }
+
+      // Also try to get boarding payments
+      try {
+        const boardingPaymentsRes = await axios.get(`${BASE_URL}/boarding/payments?page=1&limit=10000`, { headers: authHeaders });
+        if (boardingPaymentsRes.data.data) {
+          const boardingPayments = boardingPaymentsRes.data.data;
+          const currentYear = new Date().getFullYear();
+          const completedBoardingPayments = boardingPayments.filter(payment => {
+            const paymentDate = new Date(payment.payment_date || payment.created_at);
+            return paymentDate.getFullYear() === currentYear &&
+              (payment.status === 'completed' || !payment.status);
+          });
+
+          const totalBoardingCollected = completedBoardingPayments.reduce((sum, payment) => {
+            return sum + (parseFloat(payment.base_currency_amount || payment.amount || 0));
+          }, 0);
+
+          totalCollectedFees += totalBoardingCollected;
+        }
+      } catch (err) {
+        console.log('Boarding payments fetch failed:', err.message);
+      }
+
+      // Calculate total revenue - use all payments if available, otherwise use trends
+      // For total revenue, we want all-time or at least current year total
+      let totalRevenue = 0;
+      if (totalRevenueFromPayments > 0) {
+        // This is current year revenue from payments
+        totalRevenue = totalRevenueFromPayments;
+      } else {
+        // Fallback to trends (current year)
+        totalRevenue = revenueTrendsData.reduce((sum, item) => sum + (item.total_revenue || 0), 0);
+      }
+
+      // If we have totalCollectedFees (which includes boarding), use that for a more complete picture
+      // But only if it's higher (meaning it includes more data sources)
+      if (totalCollectedFees > totalRevenue) {
+        totalRevenue = totalCollectedFees;
+      }
+
       const monthlyExpenses = expenseTrendsData.length > 0 ? expenseTrendsData[expenseTrendsData.length - 1]?.total_expense || 0 : 0;
 
       setMetrics({
@@ -281,6 +430,7 @@ const Dashboard = () => {
         activeClasses,
         totalEmployees,
         pendingPayments,
+        pendingPaymentsAmount,
         outstandingBalances,
         monthlyRevenue,
         monthlyExpenses,
@@ -359,8 +509,46 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading dashboard...</div>
+      <div className="w-full space-y-6">
+        {/* Header (real title while cards load) */}
+        <div className="mb-6">
+          <h3 className="report-title">Welcome to Norton Adventist Secondary School</h3>
+          <p className="report-subtitle">Dashboard Overview</p>
+        </div>
+
+        {/* Metric Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-lg border border-gray-200 p-4"
+            >
+              <div className="animate-pulse space-y-4">
+                <div className="flex justify-between items-start">
+                  <div className="h-3 bg-gray-200 rounded w-24"></div>
+                  <div className="h-8 w-8 bg-gray-100 rounded-full"></div>
+                </div>
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
+                <div className="h-3 bg-gray-100 rounded w-28"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Charts Skeleton Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {[0, 1].map((key) => (
+            <div
+              key={key}
+              className="bg-white rounded-lg border border-gray-200 p-6"
+            >
+              <div className="animate-pulse space-y-4">
+                <div className="h-4 bg-gray-200 rounded w-40"></div>
+                <div className="h-56 bg-gray-100 rounded"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -369,7 +557,7 @@ const Dashboard = () => {
     <div className="w-full space-y-6">
       {/* Header */}
       <div className="mb-6">
-        <h3 className="report-title">Welcome to Brooklyn</h3>
+        <h3 className="report-title">Welcome to Norton Adventist Secondary School</h3>
         <p className="report-subtitle">Dashboard Overview</p>
       </div>
 
@@ -421,7 +609,7 @@ const Dashboard = () => {
         />
         <MetricCard
           title="Pending Payments"
-          value={formatNumber(metrics.pendingPayments)}
+          value={formatCurrency(metrics.pendingPaymentsAmount || metrics.pendingPayments)}
           icon={CreditCard}
           color="orange"
         />

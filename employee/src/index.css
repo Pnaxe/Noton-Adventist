@@ -135,10 +135,18 @@ body::-webkit-scrollbar {
   right: 0;
   width: calc(100% - 250px);
   height: 60px;
+  min-height: 56px;
   background: var(--card-bg);
   padding: 0 20px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
   z-index: 100;
+}
+
+/* Mobile: menu button - minimum 44px touch target for accessibility */
+.top-nav-menu-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 10px;
 }
 
 .top-nav-content {
@@ -669,26 +677,45 @@ body::-webkit-scrollbar {
   text-align: center;
 }
 
-/* Mobile Sidebar */
+/* Mobile Sidebar - above header when open */
 .sidebar-mobile-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 999;
+  z-index: 299;
 }
 
 .sidebar-mobile {
   position: fixed;
   inset-y: 0;
   left: 0;
-  width: 250px;
+  width: min(280px, 85vw);
+  max-width: 280px;
   height: 100vh;
+  height: 100dvh;
   background-color: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
-  box-shadow: 4px 0 24px 0 rgba(0, 0, 0, 0.02);
-  z-index: 1000;
+  box-shadow: 4px 0 24px 0 rgba(0, 0, 0, 0.15);
+  z-index: 300;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+/* Easier tap targets for nav items on mobile */
+@media (max-width: 1023px) {
+  .sidebar-mobile .nav-item {
+    min-height: 48px;
+    padding: 14px 20px;
+    font-size: 0.875rem;
+  }
+  .sidebar-mobile .sidebar-header {
+    min-height: 56px;
+  }
+  .sidebar-mobile .sidebar-header button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 
 /* Responsive Breakpoints */
@@ -700,7 +727,13 @@ body::-webkit-scrollbar {
   .top-nav-bar {
     left: 0;
     width: 100%;
-    padding: 0 15px;
+    padding: 0 12px;
+    z-index: 200;
+  }
+
+  .top-nav-left {
+    flex-shrink: 0;
+    min-width: 0;
   }
 
   .main-content {

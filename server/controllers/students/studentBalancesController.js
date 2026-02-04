@@ -152,6 +152,104 @@ class StudentBalancesController {
         }
     }
 
+    // Get all students with opening balance adjustments
+    async getStudentsWithOpeningBalances(req, res) {
+        const conn = await pool.getConnection();
+        try {
+            const { page = 1, limit = 25, search = '' } = req.query;
+            const pageNum = parseInt(page);
+            const limitNum = parseInt(limit);
+            const offset = (pageNum - 1) * limitNum;
+
+            let whereConditions = [];
+            let queryParams = [];
+
+            // Filter for students with opening balance transactions
+            whereConditions.push(`EXISTS (
+                SELECT 1 FROM student_transactions st
+                WHERE st.student_reg_number = s.RegNumber
+                AND (
+                    LOWER(st.description) LIKE '%opening balance%'
+                    OR LOWER(st.description) LIKE '%manual balance%'
+                    OR LOWER(st.description) LIKE '%historical debt%'
+                    OR LOWER(st.description) LIKE '%mbu%'
+                    OR LOWER(st.description) LIKE '%ob-%'
+                )
+            )`);
+
+            // Add search filter
+            if (search && search.trim() !== '') {
+                whereConditions.push('(s.Name LIKE ? OR s.Surname LIKE ? OR s.RegNumber LIKE ?)');
+                const searchTerm = `%${search.trim()}%`;
+                queryParams.push(searchTerm, searchTerm, searchTerm);
+            }
+
+            const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+            // Get total count
+            const [countResult] = await conn.query(
+                `SELECT COUNT(DISTINCT s.RegNumber) as total
+                 FROM students s
+                 ${whereClause}`,
+                queryParams
+            );
+
+            const total = countResult[0].total;
+            const totalPages = Math.ceil(total / limitNum);
+
+            // Get students with opening balances and their current balance
+            const finalParams = [...queryParams, limitNum, offset];
+            const [students] = await conn.query(
+                `SELECT DISTINCT
+                    s.RegNumber,
+                    s.Name,
+                    s.Surname,
+                    s.Gender,
+                    COALESCE(sb.current_balance, 0) as current_balance,
+                    sb.last_updated,
+                    (SELECT COUNT(*) FROM student_transactions st 
+                     WHERE st.student_reg_number = s.RegNumber
+                     AND (
+                         LOWER(st.description) LIKE '%opening balance%'
+                         OR LOWER(st.description) LIKE '%manual balance%'
+                         OR LOWER(st.description) LIKE '%historical debt%'
+                         OR LOWER(st.description) LIKE '%mbu%'
+                         OR LOWER(st.description) LIKE '%ob-%'
+                     )) as opening_balance_count
+                 FROM students s
+                 LEFT JOIN student_balances sb ON s.RegNumber = sb.student_reg_number
+                 ${whereClause}
+                 ORDER BY s.Name, s.Surname
+                 LIMIT ? OFFSET ?`,
+                finalParams
+            );
+
+            conn.release();
+
+            res.json({
+                success: true,
+                data: students,
+                pagination: {
+                    currentPage: pageNum,
+                    totalPages: totalPages,
+                    totalStudents: total,
+                    limit: limitNum,
+                    hasNextPage: pageNum < totalPages,
+                    hasPreviousPage: pageNum > 1
+                }
+            });
+
+        } catch (error) {
+            conn.release();
+            console.error('Error fetching students with opening balances:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Failed to fetch students with opening balances',
+                error: error.message
+            });
+        }
+    }
+
     // Student Opening Balance Entry (for historical data only)
     async manualBalanceAdjustment(req, res) {
         const connection = await pool.getConnection();

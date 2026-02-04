@@ -6,26 +6,22 @@ const ErrorModal = ({ isOpen, onClose, message }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-4 w-full max-w-md mx-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <FontAwesomeIcon icon={faExclamationTriangle} className="text-red-500 text-lg mr-2" />
-            <h2 className="text-base font-bold text-gray-900">Error</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <FontAwesomeIcon icon={faTimes} className="text-xs" />
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1003 }}>
+      <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+        <div className="modal-header">
+          <h3 className="modal-title">Error</h3>
+          <button className="modal-close-btn" onClick={onClose}>
+            <FontAwesomeIcon icon={faTimes} />
           </button>
         </div>
-        <p className="text-xs text-gray-600 mb-4">{message}</p>
-        <div className="flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 bg-gray-900 text-white rounded text-xs hover:bg-gray-800"
-          >
+        <div className="modal-body">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <FontAwesomeIcon icon={faExclamationTriangle} style={{ color: '#ef4444', fontSize: '1.5rem' }} />
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)' }}>{message}</p>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose} className="modal-btn modal-btn-confirm">
             OK
           </button>
         </div>
@@ -35,3 +31,4 @@ const ErrorModal = ({ isOpen, onClose, message }) => {
 };
 
 export default ErrorModal;
+

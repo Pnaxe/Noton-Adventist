@@ -88,7 +88,7 @@ const Header = ({ onMenuClick }) => {
             color: 'var(--text-primary)',
             marginLeft: '4px',
             whiteSpace: 'nowrap'
-          }}>Brooklyn Private School</span>
+          }}>Norton Adventist Secondary School</span>
         </div>
 
         {/* Center - Empty for student portal */}

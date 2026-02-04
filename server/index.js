@@ -48,6 +48,7 @@ const closeToTermRoutes = require('./routes/classes/closeToTerm');
 const additionalFeesRoutes = require('./routes/fees/additionalFees');
 const studentFinancialRoutes = require('./routes/students/studentFinancial');
 const studentResultsRoutes = require('./routes/students/studentResults');
+const receiptRoutes = require('./routes/receipts/receipts');
 const studentEnrollmentRoutes = require('./routes/students/studentEnrollments');
 const studentAnnouncementRoutes = require('./routes/students/studentAnnouncements');
 const studentAttendanceRoutes = require('./routes/students/studentAttendance');
@@ -68,10 +69,44 @@ const PORT = process.env.PORT || 5000;
 // Trust proxy for rate limiting (required for cPanel hosting)
 app.set('trust proxy', 1);
 
-// Security middleware
-app.use(helmet());
-app.use(cors());
- 
+// CORS configuration - must be before other middleware
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = [
+      'https://secondary.admin.brooklynprivatecollege.co.zw',
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+      'http://localhost:5176',
+      'http://localhost:5177',
+      'https://localhost:5173'
+    ];
+
+    // Allow any localhost origin in development (Vite may use different ports)
+    const isLocalhost = /^https?:\/\/localhost(:\d+)?$/.test(origin);
+    if (allowedOrigins.indexOf(origin) !== -1 || isLocalhost) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
+
+// Security middleware - configure helmet to work with CORS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false
+}));
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 5 * 60 * 1000, // 5 minutes
@@ -92,8 +127,8 @@ app.use((req, res, next) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime()
   });
@@ -128,6 +163,7 @@ app.use('/api/student-balances', studentBalanceRoutes);
 app.use('/api/transactions', studentTransactionRoutes);
 app.use('/api/student-financial-records', studentFinancialRecordRoutes);
 app.use('/api/fees/payments', feePaymentRoutes);
+app.use('/api/receipts', receiptRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/employee-payroll', employeePayrollRoutes);
 app.use('/api/transport', transportRoutes);
@@ -177,24 +213,24 @@ const startServer = async () => {
     // Auto-generate accounting periods for current year
     const PeriodController = require('./controllers/accounting/periodController');
     await PeriodController.autoGenerateCurrentYearPeriods();
-    
+
     app.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
-  console.log(`API Documentation:`);
-  console.log(`  - Auth: http://localhost:${PORT}/api/auth`);
-  console.log(`  - Users: http://localhost:${PORT}/api/users`);
-  console.log(`  - Management: http://localhost:${PORT}/api/management`);
-  console.log(`  - Audit: http://localhost:${PORT}/api/audit`);
-  console.log(`  - Students: http://localhost:${PORT}/api/students`);
-  console.log(`  - Classes: http://localhost:${PORT}/api/classes`);
-  console.log(`  - Employees: http://localhost:${PORT}/api/employees`);
-  console.log(`  - Configurations: http://localhost:${PORT}/api/configurations`);
-  console.log(`  - Accounting: http://localhost:${PORT}/api/accounting`);
-  console.log(`  - Expenses: http://localhost:${PORT}/api/expenses`);
-  console.log(`  - Results: http://localhost:${PORT}/api/results`);
-  console.log(`  - Boarding: http://localhost:${PORT}/api/boarding`);
-  console.log(`  - Fees: http://localhost:${PORT}/api/fees`);
+      console.log(`Server is running on port ${PORT}`);
+      console.log(`Health check: http://localhost:${PORT}/health`);
+      console.log(`API Documentation:`);
+      console.log(`  - Auth: http://localhost:${PORT}/api/auth`);
+      console.log(`  - Users: http://localhost:${PORT}/api/users`);
+      console.log(`  - Management: http://localhost:${PORT}/api/management`);
+      console.log(`  - Audit: http://localhost:${PORT}/api/audit`);
+      console.log(`  - Students: http://localhost:${PORT}/api/students`);
+      console.log(`  - Classes: http://localhost:${PORT}/api/classes`);
+      console.log(`  - Employees: http://localhost:${PORT}/api/employees`);
+      console.log(`  - Configurations: http://localhost:${PORT}/api/configurations`);
+      console.log(`  - Accounting: http://localhost:${PORT}/api/accounting`);
+      console.log(`  - Expenses: http://localhost:${PORT}/api/expenses`);
+      console.log(`  - Results: http://localhost:${PORT}/api/results`);
+      console.log(`  - Boarding: http://localhost:${PORT}/api/boarding`);
+      console.log(`  - Fees: http://localhost:${PORT}/api/fees`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

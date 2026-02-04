@@ -50,11 +50,24 @@ class EmployeeAuthController {
         password_set: employee.password_set 
       });
 
-      // Check if this is first-time login (no password set)
-      if (!employee.password_set || !employee.password) {
-        console.log('🆕 First-time login detected, password setup required');
+      // First-time login = no password set
+      const noPasswordSet = !employee.password_set || !employee.password ||
+        (typeof employee.password === 'string' && employee.password.trim() === '');
+
+      if (noPasswordSet) {
+        // Require employee number as password for first-time login (case-insensitive)
+        const passwordTrimmed = (password && typeof password === 'string' ? password : '').trim();
+        const employeeIdTrimmed = (employee.employee_id && String(employee.employee_id)).trim();
+        if (passwordTrimmed.toLowerCase() !== employeeIdTrimmed.toLowerCase()) {
+          console.log('❌ First login: password must be employee number');
+          return res.status(401).json({
+            error: 'First-time login: use your employee number as both username and password.',
+            requiresPasswordSetup: false
+          });
+        }
+        console.log('🆕 First-time login validated with employee number, password setup required');
         return res.status(200).json({
-          message: 'First-time login - password setup required',
+          message: 'First-time login - set your password',
           requiresPasswordSetup: true,
           employee: {
             id: employee.id,

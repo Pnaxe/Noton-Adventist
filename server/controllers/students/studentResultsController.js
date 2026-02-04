@@ -49,10 +49,20 @@ class StudentResultsController {
       );
 
       if (publishedCheck.length === 0 || !publishedCheck[0].is_published) {
-        return res.status(403).json({
-          success: false,
-          message: 'Results for this term and year are not yet published.',
-          access_denied: true
+        // Return 200 with empty results so the UI can show a friendly message (no 403 in console)
+        return res.status(200).json({
+          success: true,
+          data: {
+            student_reg_number: regNumber,
+            academic_year,
+            term,
+            results: [],
+            class_position: null,
+            stream_position: null,
+            total_subjects: 0,
+            not_published: true,
+            message: 'Results for this term and year are not yet published.'
+          }
         });
       }
 

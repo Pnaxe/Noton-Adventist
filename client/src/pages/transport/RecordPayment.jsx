@@ -143,48 +143,91 @@ const RecordPayment = () => {
 
   if (success) {
     return (
-      <div className="max-w-2xl mx-auto p-6">
-        <div className="bg-white border border-gray-200 p-6 text-center">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-            <FontAwesomeIcon icon={faMoneyBillWave} className="text-green-600 text-lg" />
+      <div className="reports-container" style={{
+        height: '100%',
+        maxHeight: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}>
+        {/* Report Header */}
+        <div className="report-header" style={{ flexShrink: 0 }}>
+          <div className="report-header-content">
+            <h2 className="report-title">Record Transport Payment</h2>
+            <p className="report-subtitle">Capture a payment against a student's transport fee.</p>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Payment Recorded Successfully!</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            The transport payment has been recorded and the fee status has been updated.
-          </p>
-          <div className="bg-green-50 border border-green-200 p-3 rounded">
-            <p className="text-xs text-green-800">
-              <strong>✓</strong> Payment recorded<br/>
-              <strong>✓</strong> Fee status updated<br/>
-              <strong>✓</strong> Journal entry created<br/>
-              <strong>✓</strong> Receipt generated
-            </p>
+          <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              onClick={() => navigate('/dashboard/transport')}
+              className="btn-checklist"
+              style={{ background: '#6b7280' }}
+            >
+              <FontAwesomeIcon icon={faArrowLeft} />
+              Back to Transport
+            </button>
           </div>
-          <p className="text-xs text-gray-500 mt-4">
-            Redirecting to transport dashboard...
-          </p>
+        </div>
+
+        {/* Success Content */}
+        <div className="report-content-container" style={{ padding: '20px' }}>
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white border border-gray-200 p-6 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <FontAwesomeIcon icon={faMoneyBillWave} className="text-green-600 text-lg" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Payment Recorded Successfully!</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                The transport payment has been recorded and the fee status has been updated.
+              </p>
+              <div className="bg-green-50 border border-green-200 p-3 rounded">
+                <p className="text-xs text-green-800">
+                  <strong>✓</strong> Payment recorded<br/>
+                  <strong>✓</strong> Fee status updated<br/>
+                  <strong>✓</strong> Journal entry created<br/>
+                  <strong>✓</strong> Receipt generated
+                </p>
+              </div>
+              <p className="text-xs text-gray-500 mt-4">
+                Redirecting to transport dashboard...
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-3">
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      {/* Report Header */}
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Record Transport Payment</h2>
+          <p className="report-subtitle">Record payment for transport fees.</p>
+        </div>
+        <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
             onClick={() => navigate('/dashboard/transport')}
-            className="text-gray-600 hover:text-gray-800"
+            className="btn-checklist"
+            style={{ background: '#6b7280' }}
           >
-            <FontAwesomeIcon icon={faArrowLeft} className="text-sm" />
+            <FontAwesomeIcon icon={faArrowLeft} />
+            Back to Transport
           </button>
-          <div>
-            <h1 className="text-base font-medium text-gray-900">Record Transport Payment</h1>
-            <p className="text-xs text-gray-500 mt-1">Record payment for transport fees</p>
-          </div>
         </div>
       </div>
+
+      {/* Page Content */}
+      <div className="report-content-container" style={{ padding: '20px' }}>
+        <div className="max-w-2xl mx-auto">
 
       {/* Fee Details Display */}
       {feeDetails && (
@@ -386,6 +429,8 @@ const RecordPayment = () => {
           {error}
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 };

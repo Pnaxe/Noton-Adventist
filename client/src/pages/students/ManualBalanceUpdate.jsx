@@ -82,137 +82,36 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
         limit: pagination.limit,
       });
 
-      let response;
       if (activeSearchTerm && activeSearchTerm.trim() !== '') {
-        // Use search endpoint if there's an active search term
-        response = await axios.get(`${BASE_URL}/students/search?query=${activeSearchTerm.trim()}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        // For search results, client-side pagination
-        const searchData = response.data.data || [];
-        
-        // Filter students with opening balance adjustments
-        const studentsWithOpeningBalance = await filterStudentsWithOpeningBalance(searchData);
-        console.log('Found students with opening balance:', studentsWithOpeningBalance.length);
-        
-        const startIndex = (pagination.currentPage - 1) * pagination.limit;
-        const endIndex = startIndex + pagination.limit;
-        const paginatedStudents = studentsWithOpeningBalance.slice(startIndex, endIndex);
-        
-        setStudents(paginatedStudents);
+        params.append('search', activeSearchTerm.trim());
+      }
+
+      const response = await axios.get(`${BASE_URL}/students/balances/opening-balances?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        const studentsData = response.data.data || [];
+        setStudents(studentsData);
         setPagination(prev => ({
           ...prev,
-          totalPages: Math.ceil(studentsWithOpeningBalance.length / prev.limit) || 1,
-          totalStudents: studentsWithOpeningBalance.length,
-          hasNextPage: endIndex < studentsWithOpeningBalance.length,
-          hasPreviousPage: pagination.currentPage > 1
+          totalPages: response.data.pagination?.totalPages || 1,
+          totalStudents: response.data.pagination?.totalStudents || 0,
+          hasNextPage: response.data.pagination?.hasNextPage || false,
+          hasPreviousPage: response.data.pagination?.hasPreviousPage || false
         }));
       } else {
-        // Use all students endpoint for general list
-        response = await axios.get(`${BASE_URL}/students?${params}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const allStudents = response.data.data || [];
-        
-        // Filter students with opening balance adjustments
-        const studentsWithOpeningBalance = await filterStudentsWithOpeningBalance(allStudents);
-        console.log('Found students with opening balance:', studentsWithOpeningBalance.length, 'out of', allStudents.length);
-        
-        // Client-side pagination for filtered results
-        const startIndex = (pagination.currentPage - 1) * pagination.limit;
-        const endIndex = startIndex + pagination.limit;
-        const paginatedStudents = studentsWithOpeningBalance.slice(startIndex, endIndex);
-        
-        setStudents(paginatedStudents);
-        setPagination(prev => ({
-          ...prev,
-          totalPages: Math.ceil(studentsWithOpeningBalance.length / prev.limit) || 1,
-          totalStudents: studentsWithOpeningBalance.length,
-          hasNextPage: endIndex < studentsWithOpeningBalance.length,
-          hasPreviousPage: pagination.currentPage > 1
-        }));
+        setError('Failed to fetch students with opening balances');
+        setStudents([]);
       }
     } catch (error) {
       console.error('Error fetching students:', error);
-      setError('Failed to fetch students');
+      setError(error.response?.data?.message || 'Failed to fetch students with opening balances');
       setStudents([]);
     } finally {
       setLoading(false);
       setTableLoading(false);
     }
-  };
-
-  // Helper function to filter students with opening balance adjustments
-  const filterStudentsWithOpeningBalance = async (studentsList) => {
-    if (!studentsList || studentsList.length === 0) return [];
-
-    const batchSize = 5; // Smaller batch size for reliability
-    const studentsWithOpeningBalance = [];
-    
-    for (let i = 0; i < studentsList.length; i += batchSize) {
-      const batch = studentsList.slice(i, i + batchSize);
-      const batchResults = await Promise.allSettled(
-        batch.map(async (student) => {
-          try {
-            // Get student transactions to check for adjustments
-            const transactionsResponse = await axios.get(
-              `${BASE_URL}/students/financial-records/${student.RegNumber}/transactions`,
-              { 
-                headers: { Authorization: `Bearer ${token}` },
-                params: { limit: 200 } // Get more transactions to ensure we catch adjustments
-              }
-            );
-            
-            // Handle different response structures
-            let transactions = [];
-            if (transactionsResponse.data?.data?.transactions) {
-              transactions = transactionsResponse.data.data.transactions;
-            } else if (transactionsResponse.data?.transactions) {
-              transactions = transactionsResponse.data.transactions;
-            } else if (Array.isArray(transactionsResponse.data?.data)) {
-              transactions = transactionsResponse.data.data;
-            } else if (Array.isArray(transactionsResponse.data)) {
-              transactions = transactionsResponse.data;
-            }
-            
-            const hasAdjustment = transactions.some(t => {
-              if (!t) return false;
-              const desc = (t.description || '').toLowerCase();
-              const ref = (t.reference || '').toLowerCase();
-              const transType = (t.transaction_type || '').toLowerCase();
-              
-              const isAdjustment = transType === 'adjustment' || 
-                     desc.includes('opening balance') ||
-                     desc.includes('manual balance') ||
-                     desc.includes('historical debt') ||
-                     ref.includes('mbu') ||
-                     ref.includes('ob-');
-              
-              if (isAdjustment) {
-                console.log(`Found opening balance for ${student.RegNumber}:`, { transType, desc, ref });
-              }
-              
-              return isAdjustment;
-            });
-            
-            return hasAdjustment ? student : null;
-          } catch (error) {
-            console.warn(`Error checking transactions for student ${student.RegNumber}:`, error.message);
-            // Return null if we can't check - this student won't be included
-            return null;
-          }
-        })
-      );
-      
-      // Extract successful results
-      batchResults.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value !== null) {
-          studentsWithOpeningBalance.push(result.value);
-        }
-      });
-    }
-    
-    return studentsWithOpeningBalance;
   };
 
   const handleOpenModal = async (student = null) => {
@@ -443,14 +342,6 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
   const displayStart = students.length > 0 ? (pagination.currentPage - 1) * pagination.limit + 1 : 0;
   const displayEnd = Math.min(pagination.currentPage * pagination.limit, pagination.totalStudents);
 
-  if (loading && students.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading students...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="reports-container" style={{
       height: '100%',
@@ -543,8 +434,18 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
         height: '100%'
       }}>
         {tableLoading && students.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading students...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading students...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
@@ -576,8 +477,8 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
                   <td style={{ padding: '4px 10px' }}>
                     {student.RegNumber}
                   </td>
-                  <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 700 }}>
-                    N/A
+                  <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 700, color: student.current_balance < 0 ? '#dc2626' : student.current_balance > 0 ? '#059669' : 'var(--text-primary)' }}>
+                    {formatCurrency(student.current_balance || 0)}
                   </td>
                   <td style={{ padding: '4px 10px' }}>
                     <button

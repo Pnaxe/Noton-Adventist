@@ -30,6 +30,7 @@ router.get('/guardians/:id', guardianController.getGuardianById);
 // Student balances routes
 router.get('/balances/outstanding', requireRole('STUDENT_REGISTRATIONS'), studentBalancesController.getAllStudentsWithDebts);
 router.get('/balances/summary', requireRole('STUDENT_REGISTRATIONS'), studentBalancesController.getOutstandingDebtSummary);
+router.get('/balances/opening-balances', requireRole('STUDENT_REGISTRATIONS'), studentBalancesController.getStudentsWithOpeningBalances);
 router.post('/manual-balance-adjustment', requireRole('STUDENT_REGISTRATIONS'), studentBalancesController.manualBalanceAdjustment);
 
 module.exports = router;

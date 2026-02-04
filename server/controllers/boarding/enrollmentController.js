@@ -445,6 +445,7 @@ class EnrollmentController {
 
   // Get all enrollments with pagination and search
   static async getAllEnrollments(req, res) {
+    const conn = await pool.getConnection();
     try {
       const { 
         page = 1, 
@@ -495,33 +496,65 @@ class EnrollmentController {
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
       // Get enrollments with student, hostel, and room details
-      const [enrollments] = await pool.execute(`
-        SELECT 
-          be.*,
-          s.Name as student_name,
-          s.Surname as student_surname,
-          s.Gender as student_gender,
-          h.name as hostel_name,
-          h.gender as hostel_gender,
-          r.room_number,
-          r.room_type,
-          r.capacity as room_capacity,
-          bfb.total_fee,
-          bfb.paid_amount,
-          bfb.outstanding_balance,
-          bfb.status as balance_status
-        FROM boarding_enrollments be
-        LEFT JOIN students s ON be.student_reg_number = s.RegNumber
-        LEFT JOIN hostels h ON be.hostel_id = h.id
-        LEFT JOIN rooms r ON be.room_id = r.id
-        LEFT JOIN boarding_fee_balances bfb ON be.id = bfb.enrollment_id
-        ${whereClause}
-        ORDER BY be.enrollment_date DESC
-        LIMIT ? OFFSET ?
-      `, [...params, parseInt(limit), offset]);
+      // Try with boarding_fee_balances join first, fallback if table doesn't exist
+      let enrollments;
+      try {
+        [enrollments] = await conn.query(`
+          SELECT 
+            be.*,
+            s.Name as student_name,
+            s.Surname as student_surname,
+            s.Gender as student_gender,
+            h.name as hostel_name,
+            h.gender as hostel_gender,
+            r.room_number,
+            r.room_type,
+            r.capacity as room_capacity,
+            COALESCE(bfb.total_fee, 0) as total_fee,
+            COALESCE(bfb.paid_amount, 0) as paid_amount,
+            COALESCE(bfb.outstanding_balance, 0) as outstanding_balance,
+            COALESCE(bfb.status, 'outstanding') as balance_status
+          FROM boarding_enrollments be
+          LEFT JOIN students s ON be.student_reg_number = s.RegNumber
+          LEFT JOIN hostels h ON be.hostel_id = h.id
+          LEFT JOIN rooms r ON be.room_id = r.id
+          LEFT JOIN boarding_fee_balances bfb ON be.id = bfb.enrollment_id 
+            AND bfb.term = be.term 
+            AND bfb.academic_year = be.academic_year
+          ${whereClause}
+          ORDER BY be.enrollment_date DESC
+          LIMIT ? OFFSET ?
+        `, [...params, parseInt(limit), offset]);
+      } catch (joinError) {
+        // If boarding_fee_balances table doesn't exist, query without it
+        console.warn('boarding_fee_balances table not found, querying without balance info:', joinError.message);
+        [enrollments] = await conn.query(`
+          SELECT 
+            be.*,
+            s.Name as student_name,
+            s.Surname as student_surname,
+            s.Gender as student_gender,
+            h.name as hostel_name,
+            h.gender as hostel_gender,
+            r.room_number,
+            r.room_type,
+            r.capacity as room_capacity,
+            0 as total_fee,
+            0 as paid_amount,
+            0 as outstanding_balance,
+            'outstanding' as balance_status
+          FROM boarding_enrollments be
+          LEFT JOIN students s ON be.student_reg_number = s.RegNumber
+          LEFT JOIN hostels h ON be.hostel_id = h.id
+          LEFT JOIN rooms r ON be.room_id = r.id
+          ${whereClause}
+          ORDER BY be.enrollment_date DESC
+          LIMIT ? OFFSET ?
+        `, [...params, parseInt(limit), offset]);
+      }
 
       // Get total count for pagination
-      const [countResult] = await pool.execute(`
+      const [countResult] = await conn.query(`
         SELECT COUNT(*) as total
         FROM boarding_enrollments be
         LEFT JOIN students s ON be.student_reg_number = s.RegNumber
@@ -547,7 +580,13 @@ class EnrollmentController {
       });
     } catch (error) {
       console.error('Error fetching enrollments:', error);
-      res.status(500).json({ success: false, message: 'Failed to fetch enrollments' });
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch enrollments',
+        error: error.message 
+      });
+    } finally {
+      conn.release();
     }
   }
 

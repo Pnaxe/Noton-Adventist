@@ -12,6 +12,7 @@ router.use(authenticateToken);
 
 // Stream routes (academic levels: Form, Grade, ECD)
 router.get('/', requireRole('CLASS_MANAGEMENT'), streamController.getAllStreams);
+router.delete('/clear-unused', requireRole('CLASS_MANAGEMENT'), streamController.clearUnusedStreams);
 router.get('/:id', requireRole('CLASS_MANAGEMENT'), streamController.getStreamById);
 router.post('/', requireRole('CLASS_MANAGEMENT'), streamController.createStream);
 router.put('/:id', requireRole('CLASS_MANAGEMENT'), streamController.updateStream);

@@ -19,9 +19,11 @@ import {
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import BASE_URL from '../../contexts/Api';
+import { useNavigate } from 'react-router-dom';
 
 const CashFlow = () => {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('comparison'); // 'single' | 'comparison'
   const [reportType, setReportType] = useState('monthly'); // monthly | custom
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -41,6 +43,9 @@ const CashFlow = () => {
   const [data, setData] = useState(null);
   const [multiMonthData, setMultiMonthData] = useState(null);
   const [hideEmptyRows, setHideEmptyRows] = useState(false);
+
+  // Toast state
+  const [toast, setToast] = useState({ message: null, type: 'success', visible: false });
 
   // Save/Load Modal States
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -63,6 +68,59 @@ const CashFlow = () => {
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  };
+
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+    
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: '20',
+      height: '20',
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      strokeWidth: '2',
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round'
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      default: return '#10b981';
+    }
   };
 
   const handleSearch = async () => {
@@ -222,12 +280,11 @@ const CashFlow = () => {
         headers: authHeaders
       });
 
-      setSuccess('Report saved successfully!');
+      showToast('Report saved successfully!', 'success');
       setShowSaveModal(false);
       setReportName('');
       setReportDescription('');
       setReportTags('');
-      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error saving report:', err);
       setError(err.response?.data?.error || 'Failed to save report');
@@ -397,7 +454,14 @@ const CashFlow = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="reports-container" style={{ 
+      height: '100%', 
+      maxHeight: '100%', 
+      overflow: 'hidden', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      position: 'relative' 
+    }}>
       <style>
         {`
           @media print {
@@ -416,158 +480,204 @@ const CashFlow = () => {
             .no-print {
               display: none !important;
             }
-            .bg-gray-50 {
-              background-color: white !important;
-            }
           }
         `}
       </style>
 
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-2 md:px-4 lg:px-6 py-3 md:py-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <h1 className="text-base md:text-lg font-semibold text-gray-900">Cash Flow Statement</h1>
-              <p className="text-xs text-gray-600 mt-1">Cash In & Cash Out Report</p>
-            </div>
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full sm:w-auto no-print">
-              <button 
-                onClick={handleSaveReport}
-                disabled={!data}
-                className="bg-blue-600 text-white px-2 md:px-3 py-1.5 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-1 md:space-x-2 text-xs font-medium justify-center"
-              >
-                <FontAwesomeIcon icon={faSave} />
-                <span>Save</span>
-              </button>
-              <button 
-                onClick={loadSavedReports}
-                disabled={loadingReports}
-                className="bg-purple-600 text-white px-2 md:px-3 py-1.5 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-1 md:space-x-2 text-xs font-medium justify-center"
-              >
-                <FontAwesomeIcon icon={faFolderOpen} />
-                <span>Load</span>
-              </button>
-              <button 
-                onClick={openCompareModal}
-                disabled={loadingReports}
-                className="bg-orange-600 text-white px-2 md:px-3 py-1.5 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center space-x-1 md:space-x-2 text-xs font-medium justify-center"
-              >
-                <FontAwesomeIcon icon={faMoneyBillWave} />
-                <span>Compare</span>
-              </button>
-            </div>
-          </div>
+      {/* Report Header */}
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Cash Flow Statement</h2>
+          <p className="report-subtitle">Cash In & Cash Out Report</p>
+        </div>
+        <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button 
+            onClick={handleSaveReport}
+            disabled={!data && !multiMonthData}
+            className="btn-checklist"
+            style={{ 
+              backgroundColor: '#2563eb',
+              opacity: (!data && !multiMonthData) ? 0.5 : 1,
+              cursor: (!data && !multiMonthData) ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <FontAwesomeIcon icon={faSave} />
+            Save
+          </button>
+          <button 
+            onClick={loadSavedReports}
+            disabled={loadingReports}
+            className="btn-checklist"
+            style={{ 
+              backgroundColor: '#9333ea',
+              opacity: loadingReports ? 0.5 : 1,
+              cursor: loadingReports ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <FontAwesomeIcon icon={faFolderOpen} />
+            Load
+          </button>
+          <button 
+            onClick={openCompareModal}
+            disabled={loadingReports}
+            className="btn-checklist"
+            style={{ 
+              backgroundColor: '#ea580c',
+              opacity: loadingReports ? 0.5 : 1,
+              cursor: loadingReports ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <FontAwesomeIcon icon={faMoneyBillWave} />
+            Compare
+          </button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white border-b border-gray-200 no-print">
-        <div className="px-2 md:px-4 lg:px-6 py-3">
-          <div className="flex flex-col lg:flex-row gap-3 md:gap-4 lg:gap-6">
-            <div className="flex flex-col sm:flex-row gap-2 md:gap-3 flex-1">
-              <div className="flex items-center space-x-2">
-                <FontAwesomeIcon icon={faFilter} className="text-gray-400 text-xs" />
-                <span className="text-xs font-medium text-gray-700">View:</span>
+      {/* Success/Error Messages */}
+      {success && (
+        <div style={{ padding: '10px 30px', background: '#d1fae5', color: '#065f46', fontSize: '0.75rem', flexShrink: 0 }}>
+          <FontAwesomeIcon icon={faCheckCircle} style={{ marginRight: '8px' }} />
+          {success}
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: '10px 30px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', flexShrink: 0 }}>
+          <FontAwesomeIcon icon={faExclamationTriangle} style={{ marginRight: '8px' }} />
+          {error}
+        </div>
+      )}
+
+      {/* Filters Section */}
+      <div className="report-filters" style={{ flexShrink: 0 }}>
+        <div className="report-filters-left">
+          {/* Report Type Switcher */}
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px' }}>Report Type:</label>
+            <select
+              value="cash"
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 'income') {
+                  navigate('/dashboard/reports/income-statement');
+                } else if (value === 'balance') {
+                  navigate('/dashboard/reports/balance-sheet');
+                } else if (value === 'cash') {
+                  navigate('/dashboard/reports/cash-flow');
+                }
+              }}
+              className="filter-input"
+              style={{ minWidth: '170px', width: '170px' }}
+            >
+              <option value="income">Income Statement</option>
+              <option value="balance">Balance Sheet</option>
+              <option value="cash">Cash Flow Statement</option>
+            </select>
+          </div>
+
+          {viewMode === 'comparison' ? (
+            <>
+              <div className="filter-group">
+                <label className="filter-label" style={{ marginRight: '8px' }}>From Month:</label>
                 <select
-                  value={viewMode}
-                  onChange={(e) => setViewMode(e.target.value)}
-                  className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
+                  value={startMonth}
+                  onChange={(e) => setStartMonth(parseInt(e.target.value))}
+                  className="filter-input"
+                  style={{ minWidth: '150px', width: '150px' }}
                 >
-                  <option value="comparison">Monthly Comparison</option>
-                  <option value="single">Single Period</option>
+                  <option value={1}>January</option>
+                  <option value={2}>February</option>
+                  <option value={3}>March</option>
+                  <option value={4}>April</option>
+                  <option value={5}>May</option>
+                  <option value={6}>June</option>
+                  <option value={7}>July</option>
+                  <option value={8}>August</option>
+                  <option value={9}>September</option>
+                  <option value={10}>October</option>
+                  <option value={11}>November</option>
+                  <option value={12}>December</option>
                 </select>
               </div>
-
-              {viewMode === 'comparison' ? (
-                <>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-medium text-gray-700">From:</span>
-                    <select
-                      value={startMonth}
-                      onChange={(e) => setStartMonth(parseInt(e.target.value))}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
-                    >
-                      <option value={1}>January</option>
-                      <option value={2}>February</option>
-                      <option value={3}>March</option>
-                      <option value={4}>April</option>
-                      <option value={5}>May</option>
-                      <option value={6}>June</option>
-                      <option value={7}>July</option>
-                      <option value={8}>August</option>
-                      <option value={9}>September</option>
-                      <option value={10}>October</option>
-                      <option value={11}>November</option>
-                      <option value={12}>December</option>
-                    </select>
-                    <select
-                      value={startYear}
-                      onChange={(e) => setStartYear(parseInt(e.target.value))}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
-                    >
-                      <option value={2025}>2025</option>
-                      <option value={2024}>2024</option>
-                      <option value={2023}>2023</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-medium text-gray-700">To:</span>
-                    <select
-                      value={endMonth}
-                      onChange={(e) => setEndMonth(parseInt(e.target.value))}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
-                    >
-                      <option value={1}>January</option>
-                      <option value={2}>February</option>
-                      <option value={3}>March</option>
-                      <option value={4}>April</option>
-                      <option value={5}>May</option>
-                      <option value={6}>June</option>
-                      <option value={7}>July</option>
-                      <option value={8}>August</option>
-                      <option value={9}>September</option>
-                      <option value={10}>October</option>
-                      <option value={11}>November</option>
-                      <option value={12}>December</option>
-                    </select>
-                    <select
-                      value={endYear}
-                      onChange={(e) => setEndYear(parseInt(e.target.value))}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
-                    >
-                      <option value={2025}>2025</option>
-                      <option value={2024}>2024</option>
-                      <option value={2023}>2023</option>
-                    </select>
-                  </div>
-                </>
-              ) : (
-                <>
-              <div className="flex items-center space-x-2">
-                <FontAwesomeIcon icon={faFilter} className="text-gray-400 text-xs" />
-                <span className="text-xs font-medium text-gray-700">Report Type:</span>
+              <div className="filter-group">
+                <label className="filter-label" style={{ marginRight: '8px' }}>From Year:</label>
+                <select
+                  value={startYear}
+                  onChange={(e) => setStartYear(parseInt(e.target.value))}
+                  className="filter-input"
+                  style={{ minWidth: '120px', width: '120px' }}
+                >
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <option key={year} value={year}>{year}</option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label" style={{ marginRight: '8px' }}>To Month:</label>
+                <select
+                  value={endMonth}
+                  onChange={(e) => setEndMonth(parseInt(e.target.value))}
+                  className="filter-input"
+                  style={{ minWidth: '150px', width: '150px' }}
+                >
+                  <option value={1}>January</option>
+                  <option value={2}>February</option>
+                  <option value={3}>March</option>
+                  <option value={4}>April</option>
+                  <option value={5}>May</option>
+                  <option value={6}>June</option>
+                  <option value={7}>July</option>
+                  <option value={8}>August</option>
+                  <option value={9}>September</option>
+                  <option value={10}>October</option>
+                  <option value={11}>November</option>
+                  <option value={12}>December</option>
+                </select>
+              </div>
+              <div className="filter-group">
+                <label className="filter-label" style={{ marginRight: '8px' }}>To Year:</label>
+                <select
+                  value={endYear}
+                  onChange={(e) => setEndYear(parseInt(e.target.value))}
+                  className="filter-input"
+                  style={{ minWidth: '120px', width: '120px' }}
+                >
+                  {Array.from({ length: 10 }, (_, i) => {
+                    const year = new Date().getFullYear() - i;
+                    return (
+                      <option key={year} value={year}>{year}</option>
+                    );
+                  })}
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="filter-group">
+                <label className="filter-label" style={{ marginRight: '8px' }}>Period Type:</label>
                 <select
                   value={reportType}
                   onChange={(e) => setReportType(e.target.value)}
-                  className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
+                  className="filter-input"
+                  style={{ minWidth: '150px', width: '150px' }}
                 >
                   <option value="monthly">Monthly</option>
                   <option value="custom">Custom Range</option>
                 </select>
               </div>
-                </>
-              )}
 
-              {viewMode === 'single' && reportType === 'monthly' && (
+              {reportType === 'monthly' && (
                 <>
-                  <div className="flex items-center space-x-2">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="text-gray-400 text-xs" />
-                    <span className="text-xs font-medium text-gray-700">Month:</span>
+                  <div className="filter-group">
+                    <label className="filter-label" style={{ marginRight: '8px' }}>Month:</label>
                     <select
                       value={selectedMonth}
                       onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
+                      className="filter-input"
+                      style={{ minWidth: '150px', width: '150px' }}
                     >
                       <option value={1}>January</option>
                       <option value={2}>February</option>
@@ -583,123 +693,188 @@ const CashFlow = () => {
                       <option value={12}>December</option>
                     </select>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="text-gray-400 text-xs" />
-                    <span className="text-xs font-medium text-gray-700">Year:</span>
+                  <div className="filter-group">
+                    <label className="filter-label" style={{ marginRight: '8px' }}>Year:</label>
                     <select
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
+                      className="filter-input"
+                      style={{ minWidth: '120px', width: '120px' }}
                     >
-                      <option value={2025}>2025</option>
-                      <option value={2024}>2024</option>
-                      <option value={2023}>2023</option>
+                      {Array.from({ length: 10 }, (_, i) => {
+                        const year = new Date().getFullYear() - i;
+                        return (
+                          <option key={year} value={year}>{year}</option>
+                        );
+                      })}
                     </select>
                   </div>
                 </>
               )}
 
-              {viewMode === 'single' && reportType === 'custom' && (
+              {reportType === 'custom' && (
                 <>
-                  <div className="flex items-center space-x-2">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="text-gray-400 text-xs" />
-                    <span className="text-xs font-medium text-gray-700">Start Date:</span>
+                  <div className="filter-group">
+                    <label className="filter-label" style={{ marginRight: '8px' }}>Start Date:</label>
                     <input
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
+                      className="filter-input"
+                      style={{ minWidth: '150px', width: '150px' }}
                     />
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <FontAwesomeIcon icon={faCalendarAlt} className="text-gray-400 text-xs" />
-                    <span className="text-xs font-medium text-gray-700">End Date:</span>
+                  <div className="filter-group">
+                    <label className="filter-label" style={{ marginRight: '8px' }}>End Date:</label>
                     <input
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:border-gray-400 w-full sm:w-auto"
+                      min={startDate || undefined}
+                      className="filter-input"
+                      style={{ minWidth: '150px', width: '150px' }}
                     />
                   </div>
                 </>
               )}
-            </div>
-
-            <div className="flex items-center gap-2 md:gap-3">
-              <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hideEmptyRows}
-                  onChange={(e) => setHideEmptyRows(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span>Hide rows without data</span>
-              </label>
-              <button
-                onClick={handleSearch}
-                disabled={loading}
-                className="bg-gray-900 text-white px-3 md:px-4 py-1.5 hover:bg-gray-800 disabled:opacity-50 flex items-center space-x-2 text-xs font-medium w-full sm:w-auto justify-center"
-              >
-                <FontAwesomeIcon icon={faFilter} />
-                <span>{loading ? 'Loading...' : 'Search'}</span>
-              </button>
-            </div>
-          </div>
+            </>
+          )}
+        </div>
+        <div className="report-filters-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={hideEmptyRows}
+              onChange={(e) => setHideEmptyRows(e.target.checked)}
+              style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+            />
+            <span>Hide empty rows</span>
+          </label>
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="btn-checklist"
+            style={{ 
+              backgroundColor: '#1f2937',
+              opacity: loading ? 0.5 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <FontAwesomeIcon icon={faFilter} />
+            {loading ? 'Loading...' : 'Search'}
+          </button>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="p-2 md:p-4 lg:p-6">
-        {error && (
-          <div className="bg-red-50 border border-red-200 p-3 mb-4 text-xs text-red-700 no-print">
-            <FontAwesomeIcon icon={faExclamationTriangle} className="mr-2" />
-            {error}
+      {/* Content Container */}
+      <div className="report-content-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: '20px 30px',
+        height: '100%'
+      }}>
+        {/* Loading State */}
+        {loading && !data && !multiMonthData && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading cash flow statement...</p>
           </div>
         )}
 
-        {success && (
-          <div className="bg-green-50 border border-green-200 p-3 mb-4 text-xs text-green-700 no-print">
-            <FontAwesomeIcon icon={faCheckCircle} className="mr-2" />
-            {success}
-          </div>
-        )}
-
-        {loading && (
-          <div className="text-center py-6 md:py-8 text-gray-600 text-xs md:text-sm no-print">
-            <FontAwesomeIcon icon={faSpinner} spin className="mr-2" />
-            Loading cash flow statement...
-          </div>
-        )}
-
+        {/* No Data State */}
         {!loading && !data && !multiMonthData && !error && (
-          <div className="bg-white border border-gray-200 p-6 md:p-8 text-center no-print">
-            <FontAwesomeIcon icon={faMoneyBillWave} className="text-gray-400 text-3xl md:text-4xl mb-3 md:mb-4" />
-            <h3 className="text-base md:text-lg font-medium text-gray-900 mb-2">No Cash Flow Data</h3>
-            <p className="text-gray-500 text-xs md:text-sm">Choose filters and click Search.</p>
+          <div style={{ 
+            background: 'white', 
+            border: '1px solid var(--border-color)', 
+            padding: '60px 30px', 
+            textAlign: 'center',
+            borderRadius: '4px'
+          }}>
+            <FontAwesomeIcon icon={faMoneyBillWave} style={{ color: 'var(--text-secondary)', fontSize: '3rem', marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+              No Cash Flow Data
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+              Select a period and click Search to view the cash flow statement data.
+            </p>
+          </div>
+        )}
+
+        {/* Report Title and Period - Comparison View */}
+        {!loading && !error && multiMonthData && viewMode === 'comparison' && (
+          <div style={{ 
+            marginBottom: '16px',
+            padding: '12px 0'
+          }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+              Cash Flow Statement
+            </h2>
+            <p style={{ fontSize: '0.875rem', color: '#6b7280', fontWeight: 500 }}>
+              Monthly Comparison - {multiMonthData.fiscalYear}
+            </p>
           </div>
         )}
 
         {/* Multi-Month Comparison Table */}
         {!loading && !error && multiMonthData && viewMode === 'comparison' && (
           <div className="bg-white border border-gray-200 printable-area overflow-x-auto">
-            <div className="px-3 md:px-6 py-3 border-b border-gray-200">
-              <h2 className="text-base md:text-lg font-semibold text-gray-900">Cash Flow Statement</h2>
-              <p className="text-xs text-gray-600">Monthly Comparison - {multiMonthData.fiscalYear}</p>
-            </div>
             
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs border-collapse">
                 <thead>
-                  <tr className="bg-gray-50 border-b-2 border-gray-300">
-                    <th className="px-3 py-2 text-left font-semibold text-gray-700 border-r border-gray-300 sticky left-0 bg-gray-50 z-10 min-w-[200px]">
+                  <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
+                    <th style={{ 
+                      padding: '12px 15px', 
+                      textAlign: 'left', 
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      color: '#ffffff',
+                      background: '#374151',
+                      borderRight: '1px solid #e5e7eb',
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 10,
+                      minWidth: '200px'
+                    }}>
                       Account
                     </th>
                     {multiMonthData.months.map((month, idx) => (
-                      <th key={idx} className="px-3 py-2 text-center font-semibold text-gray-700 border-r border-gray-300 min-w-[100px]">
+                      <th key={idx} style={{ 
+                        padding: '12px 15px', 
+                        textAlign: 'center', 
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        color: '#111827',
+                        borderRight: '1px solid #e5e7eb',
+                        background: '#ffffff',
+                        minWidth: '100px'
+                      }}>
                         {month.label}
                       </th>
                     ))}
-                    <th className="px-3 py-2 text-center font-semibold text-gray-700 bg-gray-100 min-w-[100px]">
+                    <th style={{ 
+                      padding: '12px 15px', 
+                      textAlign: 'center', 
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      color: '#111827',
+                      background: '#f9fafb',
+                      minWidth: '100px'
+                    }}>
                       FY-{multiMonthData.fiscalYear.split('-')[0].slice(-2)}
                     </th>
                   </tr>
@@ -1221,6 +1396,23 @@ const CashFlow = () => {
           </div>
         )}
 
+        {/* Report Title and Period - Single Period View */}
+        {!loading && !error && data && viewMode === 'single' && (
+          <div style={{ 
+            marginBottom: '16px',
+            padding: '12px 0'
+          }}>
+            <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+              Cash Flow Statement
+            </h2>
+            <p style={{ fontSize: '0.875rem', color: '#6b7280', fontWeight: 500 }}>
+              {data.period?.period_name ? data.period.period_name : 
+               (data.start_date && data.end_date ? `${data.start_date} to ${data.end_date}` : 
+                (reportType === 'monthly' ? `${new Date(selectedYear, selectedMonth - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : ''))}
+            </p>
+          </div>
+        )}
+
         {!loading && !error && data && viewMode === 'single' && (
           <>
             {/* Summary Cards */}
@@ -1278,13 +1470,6 @@ const CashFlow = () => {
 
             {/* Cash Flow Statement Details */}
             <div className="bg-white border border-gray-200 printable-area">
-              <div className="px-3 md:px-6 py-3 border-b border-gray-200">
-                <h2 className="text-xs font-semibold text-gray-900">Cash Flow Statement</h2>
-                <p className="text-xs text-gray-600">
-                  {data.period?.period_name ? data.period.period_name : 
-                   (data.start_date && data.end_date ? `${data.start_date} to ${data.end_date}` : '')}
-                </p>
-              </div>
 
               <div className="p-3 md:p-6">
                 {/* Cash Inflows */}
@@ -1369,110 +1554,299 @@ const CashFlow = () => {
 
         {/* Comparison View */}
         {showComparisonView && comparisonData && !loading && (
-          <div className="bg-white border border-gray-200 mb-6 no-print">
-            <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-sm font-semibold text-gray-900">
+          <div style={{ 
+            background: 'white', 
+            border: '1px solid var(--border-color)',
+            borderRadius: '4px',
+            marginBottom: '20px',
+            overflow: 'hidden'
+          }}>
+            <div style={{ 
+              padding: '15px 20px', 
+              borderBottom: '1px solid var(--border-color)', 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              background: '#f9fafb'
+            }}>
+              <h2 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111827' }}>
                 Cash Flow Comparison ({comparisonData.reports.length} Reports)
               </h2>
               <button
                 onClick={() => setShowComparisonView(false)}
-                className="text-xs px-3 py-1 text-gray-600 hover:text-gray-900 border border-gray-300 hover:bg-gray-50"
+                className="btn-checklist"
+                style={{ 
+                  backgroundColor: '#6b7280',
+                  padding: '6px 12px',
+                  fontSize: '0.75rem'
+                }}
               >
-                <FontAwesomeIcon icon={faTimes} className="mr-1" />
-                Close Comparison
+                <FontAwesomeIcon icon={faTimes} style={{ marginRight: '6px' }} />
+                Close
               </button>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead className="bg-gray-50 border-b-2 border-gray-300">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%', minWidth: '800px', borderCollapse: 'separate', borderSpacing: 0 }}>
+                <thead style={{ 
+                  background: 'transparent',
+                  borderBottom: '2px solid #e5e7eb'
+                }}>
                   <tr>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-700 border-r border-gray-300 w-24">Code</th>
-                    <th className="px-3 py-3 text-left font-semibold text-gray-700 border-r border-gray-300">Account Name</th>
+                    <th style={{ 
+                      padding: '12px 15px', 
+                      textAlign: 'left', 
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      color: '#ffffff',
+                      background: '#374151',
+                      borderRight: '1px solid #e5e7eb',
+                      width: '80px'
+                    }}>
+                      Code
+                    </th>
+                    <th style={{ 
+                      padding: '12px 15px', 
+                      textAlign: 'left', 
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      color: '#ffffff',
+                      background: '#374151',
+                      borderRight: '1px solid #e5e7eb'
+                    }}>
+                      Account Name
+                    </th>
                     {comparisonData.reports.map((report, idx) => (
-                      <th key={idx} className="px-4 py-3 text-right font-semibold text-gray-700 border-l border-gray-300 bg-gray-100 min-w-[140px]">
-                        <div className="font-bold text-sm">{report.name}</div>
-                        <div className="text-xs font-normal text-gray-600 mt-1">{report.period}</div>
+                      <th key={idx} style={{ 
+                        padding: '12px 15px', 
+                        textAlign: 'right', 
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        color: '#111827',
+                        borderLeft: '1px solid #e5e7eb',
+                        background: '#ffffff',
+                        minWidth: '140px'
+                      }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.8rem', marginBottom: '4px', color: '#111827' }}>{report.name}</div>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 400 }}>
+                          {report.period}
+                        </div>
                       </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white">
+                <tbody>
                   {/* Cash Inflows Section */}
-                  <tr className="bg-green-50">
-                    <td colSpan={2 + comparisonData.reports.length} className="px-3 py-2 font-bold text-gray-900 text-sm border-t border-b border-gray-300">
-                      <FontAwesomeIcon icon={faArrowDown} className="mr-2" />
+                  <tr style={{ 
+                    background: 'linear-gradient(90deg, #f0fdf4 0%, #d1fae5 100%)', 
+                    borderTop: '2px solid #86efac'
+                  }}>
+                    <td colSpan={2 + comparisonData.reports.length} style={{ 
+                      padding: '12px 15px', 
+                      fontWeight: 700, 
+                      color: '#059669', 
+                      fontSize: '0.85rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px'
+                    }}>
+                      <FontAwesomeIcon icon={faArrowDown} style={{ marginRight: '8px', fontSize: '0.75rem' }} />
                       CASH IN
                     </td>
                   </tr>
                   {comparisonData.inflows.map((account, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-700 border-r border-gray-200">{account.account_code}</td>
-                      <td className="px-3 py-2 text-gray-700 border-r border-gray-200">{account.account_name}</td>
+                    <tr 
+                      key={idx} 
+                      style={{
+                        backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb',
+                        borderBottom: '1px solid var(--border-color)',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0fdf4'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb'}
+                    >
+                      <td style={{ 
+                        padding: '10px 15px', 
+                        whiteSpace: 'nowrap', 
+                        color: 'var(--text-primary)',
+                        borderRight: '1px solid var(--border-color)',
+                        fontSize: '0.7rem',
+                        background: '#f3f4f6',
+                        fontWeight: 500
+                      }}>
+                        {account.account_code}
+                      </td>
+                      <td style={{ 
+                        padding: '10px 15px', 
+                        color: 'var(--text-primary)',
+                        borderRight: '1px solid var(--border-color)'
+                      }}>
+                        {account.account_name}
+                      </td>
                       {account.amounts.map((amount, aidx) => (
-                        <td key={aidx} className="px-4 py-2 text-right tabular-nums border-l border-gray-200 text-gray-900">
+                        <td key={aidx} style={{ 
+                          padding: '10px 15px', 
+                          textAlign: 'right', 
+                          fontFamily: 'monospace',
+                          color: 'var(--text-primary)',
+                          borderLeft: '1px solid var(--border-color)'
+                        }}>
                           {formatCurrency(amount)}
                         </td>
                       ))}
                     </tr>
                   ))}
-                  <tr className="bg-green-100 font-semibold border-t border-gray-300">
-                    <td colSpan="2" className="px-3 py-2.5 text-gray-900 border-r border-gray-300">Total Cash In</td>
+                  <tr style={{ 
+                    background: '#d1fae5',
+                    borderTop: '2px solid #86efac',
+                    fontWeight: 700
+                  }}>
+                    <td colSpan="2" style={{ padding: '12px 15px', borderRight: '1px solid var(--border-color)' }}>Total Cash In</td>
                     {comparisonData.reports.map((report, idx) => (
-                      <td key={idx} className="px-4 py-2.5 text-right tabular-nums border-l border-gray-300 text-gray-900">
+                      <td key={idx} style={{ 
+                        padding: '12px 15px', 
+                        textAlign: 'right', 
+                        fontFamily: 'monospace',
+                        borderLeft: '1px solid var(--border-color)',
+                        color: '#059669'
+                      }}>
                         {formatCurrency(report.totals.total_inflows)}
                       </td>
                     ))}
                   </tr>
 
                   {/* Cash Outflows Section */}
-                  <tr className="bg-red-50">
-                    <td colSpan={2 + comparisonData.reports.length} className="px-3 py-2 font-bold text-gray-900 text-sm border-t-2 border-b border-gray-300">
-                      <FontAwesomeIcon icon={faArrowUp} className="mr-2" />
+                  <tr style={{ 
+                    background: 'linear-gradient(90deg, #fef2f2 0%, #fee2e2 100%)', 
+                    borderTop: '2px solid #fca5a5'
+                  }}>
+                    <td colSpan={2 + comparisonData.reports.length} style={{ 
+                      padding: '12px 15px', 
+                      fontWeight: 700, 
+                      color: '#dc2626', 
+                      fontSize: '0.85rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px'
+                    }}>
+                      <FontAwesomeIcon icon={faArrowUp} style={{ marginRight: '8px', fontSize: '0.75rem' }} />
                       CASH OUT
                     </td>
                   </tr>
                   {comparisonData.outflows.map((account, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 border-b border-gray-100">
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-700 border-r border-gray-200">{account.account_code}</td>
-                      <td className="px-3 py-2 text-gray-700 border-r border-gray-200">{account.account_name}</td>
+                    <tr 
+                      key={idx} 
+                      style={{
+                        backgroundColor: idx % 2 === 0 ? '#ffffff' : '#f9fafb',
+                        borderBottom: '1px solid var(--border-color)',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = idx % 2 === 0 ? '#ffffff' : '#f9fafb'}
+                    >
+                      <td style={{ 
+                        padding: '10px 15px', 
+                        whiteSpace: 'nowrap', 
+                        color: 'var(--text-primary)',
+                        borderRight: '1px solid var(--border-color)',
+                        fontSize: '0.7rem',
+                        background: '#f3f4f6',
+                        fontWeight: 500
+                      }}>
+                        {account.account_code}
+                      </td>
+                      <td style={{ 
+                        padding: '10px 15px', 
+                        color: 'var(--text-primary)',
+                        borderRight: '1px solid var(--border-color)'
+                      }}>
+                        {account.account_name}
+                      </td>
                       {account.amounts.map((amount, aidx) => (
-                        <td key={aidx} className="px-4 py-2 text-right tabular-nums border-l border-gray-200 text-gray-900">
+                        <td key={aidx} style={{ 
+                          padding: '10px 15px', 
+                          textAlign: 'right', 
+                          fontFamily: 'monospace',
+                          color: 'var(--text-primary)',
+                          borderLeft: '1px solid var(--border-color)'
+                        }}>
                           {formatCurrency(amount)}
                         </td>
                       ))}
                     </tr>
                   ))}
-                  <tr className="bg-red-100 font-semibold border-t border-gray-300">
-                    <td colSpan="2" className="px-3 py-2.5 text-gray-900 border-r border-gray-300">Total Cash Out</td>
+                  <tr style={{ 
+                    background: '#fee2e2',
+                    borderTop: '2px solid #fca5a5',
+                    fontWeight: 700
+                  }}>
+                    <td colSpan="2" style={{ padding: '12px 15px', borderRight: '1px solid var(--border-color)' }}>Total Cash Out</td>
                     {comparisonData.reports.map((report, idx) => (
-                      <td key={idx} className="px-4 py-2.5 text-right tabular-nums border-l border-gray-300 text-gray-900">
+                      <td key={idx} style={{ 
+                        padding: '12px 15px', 
+                        textAlign: 'right', 
+                        fontFamily: 'monospace',
+                        borderLeft: '1px solid var(--border-color)',
+                        color: '#dc2626'
+                      }}>
                         {formatCurrency(report.totals.total_outflows)}
                       </td>
                     ))}
                   </tr>
 
                   {/* Summary */}
-                  <tr className="bg-gray-100 font-bold border-t-2 border-gray-400">
-                    <td colSpan="2" className="px-3 py-3 text-gray-900 text-sm border-r border-gray-300">Net Cash Flow</td>
+                  <tr style={{ 
+                    background: 'linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 100%)',
+                    borderTop: '3px solid #6b7280',
+                    fontWeight: 700
+                  }}>
+                    <td colSpan="2" style={{ padding: '14px 15px', borderRight: '1px solid var(--border-color)', fontSize: '0.85rem' }}>Net Cash Flow</td>
                     {comparisonData.reports.map((report, idx) => (
-                      <td key={idx} className={`px-4 py-3 text-right tabular-nums text-sm border-l border-gray-300 font-bold ${report.totals.net_cash_flow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <td key={idx} style={{ 
+                        padding: '14px 15px', 
+                        textAlign: 'right', 
+                        fontFamily: 'monospace',
+                        borderLeft: '1px solid var(--border-color)',
+                        fontSize: '0.85rem',
+                        color: report.totals.net_cash_flow >= 0 ? '#059669' : '#dc2626'
+                      }}>
                         {formatCurrency(report.totals.net_cash_flow)}
                       </td>
                     ))}
                   </tr>
-                  <tr className="bg-gray-50">
-                    <td colSpan="2" className="px-3 py-2.5 text-gray-700 border-r border-gray-200">Beginning Cash</td>
+                  <tr style={{ 
+                    backgroundColor: '#f9fafb',
+                    borderBottom: '1px solid var(--border-color)'
+                  }}>
+                    <td colSpan="2" style={{ padding: '10px 15px', borderRight: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>Beginning Cash</td>
                     {comparisonData.reports.map((report, idx) => (
-                      <td key={idx} className="px-4 py-2.5 text-right tabular-nums border-l border-gray-200 text-gray-900">
+                      <td key={idx} style={{ 
+                        padding: '10px 15px', 
+                        textAlign: 'right', 
+                        fontFamily: 'monospace',
+                        borderLeft: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)'
+                      }}>
                         {formatCurrency(report.totals.beginning_cash)}
                       </td>
                     ))}
                   </tr>
-                  <tr className="bg-gray-900 text-white font-bold">
-                    <td colSpan="2" className="px-3 py-3 text-sm border-r border-gray-700">Ending Cash</td>
+                  <tr style={{ 
+                    background: '#374151',
+                    fontWeight: 700
+                  }}>
+                    <td colSpan="2" style={{ padding: '14px 15px', borderRight: '1px solid #4b5563', fontSize: '0.85rem', color: '#ffffff' }}>Ending Cash</td>
                     {comparisonData.reports.map((report, idx) => (
-                      <td key={idx} className="px-4 py-3 text-right tabular-nums text-sm border-l border-gray-700">
+                      <td key={idx} style={{ 
+                        padding: '14px 15px', 
+                        textAlign: 'right', 
+                        fontFamily: 'monospace',
+                        borderLeft: '1px solid #4b5563',
+                        fontSize: '0.85rem',
+                        color: '#ffffff'
+                      }}>
                         {formatCurrency(report.totals.ending_cash)}
                       </td>
                     ))}
@@ -1486,75 +1860,81 @@ const CashFlow = () => {
 
       {/* Save Report Modal */}
       {showSaveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Save Cash Flow Statement</h2>
+        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '500px' }}
+          >
+            <div className="modal-header">
+              <h2 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Save Cash Flow Statement
+              </h2>
               <button
                 onClick={() => setShowSaveModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
               >
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Report Name *
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">
+                  Report Name <span className="required">*</span>
                 </label>
                 <input
                   type="text"
                   value={reportName}
                   onChange={(e) => setReportName(e.target.value)}
                   placeholder="e.g., Cash Flow - October 2024"
-                  className="w-full px-3 py-2 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="form-control"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Description (Optional)
-                </label>
+              <div className="form-group">
+                <label className="form-label">Description (Optional)</label>
                 <textarea
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}
                   placeholder="Add any notes or description..."
                   rows={3}
-                  className="w-full px-3 py-2 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="form-control"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Tags (Optional)
-                </label>
+              <div className="form-group">
+                <label className="form-label">Tags (Optional)</label>
                 <input
                   type="text"
                   value={reportTags}
                   onChange={(e) => setReportTags(e.target.value)}
                   placeholder="e.g., monthly, approved, october"
-                  className="w-full px-3 py-2 text-xs border border-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="form-control"
                 />
-                <p className="text-xs text-gray-500 mt-1">Separate tags with commas</p>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Separate tags with commas
+                </p>
               </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowSaveModal(false)}
-                  className="flex-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={saveReport}
-                  disabled={loading || !reportName.trim()}
-                  className="flex-1 px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  <FontAwesomeIcon icon={faSave} className="mr-1" />
-                  Save Report
-                </button>
-              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="modal-btn modal-btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveReport}
+                disabled={loading || !reportName.trim()}
+                className="modal-btn modal-btn-primary"
+                style={{ 
+                  opacity: (loading || !reportName.trim()) ? 0.5 : 1,
+                  backgroundColor: '#2563eb'
+                }}
+              >
+                <FontAwesomeIcon icon={faSave} style={{ marginRight: '6px' }} />
+                Save Report
+              </button>
             </div>
           </div>
         </div>
@@ -1562,70 +1942,106 @@ const CashFlow = () => {
 
       {/* Load Report Modal */}
       {showLoadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold text-gray-900">Load Saved Cash Flow Statement</h2>
+        <div className="modal-overlay" onClick={() => setShowLoadModal(false)}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '700px', maxHeight: '90vh' }}
+          >
+            <div className="modal-header">
+              <h2 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Load Saved Cash Flow Statement
+              </h2>
               <button
                 onClick={() => setShowLoadModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
               >
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
-
-            {savedReports.length === 0 ? (
-              <div className="text-center py-8">
-                <FontAwesomeIcon icon={faFolderOpen} className="text-4xl text-gray-300 mb-3" />
-                <p className="text-gray-500 text-sm">No saved cash flow statements found</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {savedReports.map((report) => (
-                  <div
-                    key={report.id}
-                    className="border border-gray-200 p-3 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => loadReport(report.id)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div className="flex-1">
-                        <h3 className="text-sm font-semibold text-gray-900">{report.report_name}</h3>
-                        {report.report_description && (
-                          <p className="text-xs text-gray-600 mt-1">{report.report_description}</p>
-                        )}
-                        <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                          <span>
-                            Saved: {new Date(report.saved_at).toLocaleDateString()}
-                          </span>
-                          {report.report_summary && (
-                            <span className={report.report_summary.net_cash_flow >= 0 ? 'text-green-600' : 'text-red-600'}>
-                              Net: {formatCurrency(report.report_summary.net_cash_flow)}
-                            </span>
+            <div className="modal-body" style={{ maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
+              {savedReports.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <FontAwesomeIcon icon={faFolderOpen} style={{ fontSize: '3rem', color: 'var(--text-secondary)', marginBottom: '12px' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No saved cash flow statements found</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {savedReports.map((report) => (
+                    <div
+                      key={report.id}
+                      style={{
+                        border: '1px solid var(--border-color)',
+                        padding: '15px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onClick={() => loadReport(report.id)}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                            {report.report_name}
+                          </h3>
+                          {report.report_description && (
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                              {report.report_description}
+                            </p>
+                          )}
+                          <div style={{ display: 'flex', gap: '12px', fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                            <span>Saved: {new Date(report.saved_at).toLocaleDateString()}</span>
+                            {report.report_summary && (
+                              <span style={{ color: report.report_summary.net_cash_flow >= 0 ? '#059669' : '#dc2626' }}>
+                                Net: {formatCurrency(report.report_summary.net_cash_flow)}
+                              </span>
+                            )}
+                          </div>
+                          {report.tags && (
+                            <div style={{ marginTop: '8px' }}>
+                              {report.tags.split(',').map((tag, idx) => (
+                                <span 
+                                  key={idx} 
+                                  style={{
+                                    display: 'inline-block',
+                                    background: '#f3f4f6',
+                                    color: 'var(--text-secondary)',
+                                    fontSize: '0.7rem',
+                                    padding: '2px 8px',
+                                    marginRight: '6px',
+                                    borderRadius: '4px'
+                                  }}
+                                >
+                                  {tag.trim()}
+                                </span>
+                              ))}
+                            </div>
                           )}
                         </div>
-                        {report.tags && (
-                          <div className="mt-2">
-                            {report.tags.split(',').map((tag, idx) => (
-                              <span key={idx} className="inline-block bg-gray-100 text-gray-700 text-xs px-2 py-0.5 mr-1">
-                                {tag.trim()}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        <button style={{ 
+                          color: '#2563eb', 
+                          fontSize: '0.75rem', 
+                          fontWeight: 500, 
+                          marginLeft: '16px',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer'
+                        }}>
+                          Load →
+                        </button>
                       </div>
-                      <button className="text-blue-600 hover:text-blue-800 text-xs font-medium ml-4">
-                        Load →
-                      </button>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-6">
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
               <button
                 onClick={() => setShowLoadModal(false)}
-                className="w-full px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200"
+                className="modal-btn modal-btn-secondary"
+                style={{ width: '100%' }}
               >
                 Close
               </button>
@@ -1636,61 +2052,81 @@ const CashFlow = () => {
 
       {/* Compare Reports Modal */}
       {showCompareModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
+        <div className="modal-overlay" onClick={() => setShowCompareModal(false)}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '700px', maxHeight: '90vh' }}
+          >
+            <div className="modal-header">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Compare Cash Flow Statements</h2>
-                <p className="text-xs text-gray-600 mt-1">
+                <h2 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Compare Cash Flow Statements
+                </h2>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                   Select 2-5 reports to compare ({selectedReportsForComparison.length} selected)
                 </p>
               </div>
               <button
                 onClick={() => setShowCompareModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
               >
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
-
-            {savedReports.length === 0 ? (
-              <div className="text-center py-8">
-                <FontAwesomeIcon icon={faMoneyBillWave} className="text-4xl text-gray-300 mb-3" />
-                <p className="text-gray-500 text-sm">No saved cash flow statements found</p>
-              </div>
-            ) : (
-              <>
-                <div className="space-y-2 max-h-96 overflow-y-auto mb-4">
+            <div className="modal-body" style={{ maxHeight: 'calc(90vh - 180px)', overflowY: 'auto' }}>
+              {savedReports.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                  <FontAwesomeIcon icon={faMoneyBillWave} style={{ fontSize: '3rem', color: 'var(--text-secondary)', marginBottom: '12px' }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No saved cash flow statements found</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {savedReports.map((report) => (
                     <div
                       key={report.id}
-                      className={`border p-3 cursor-pointer transition-all ${
-                        selectedReportsForComparison.includes(report.id)
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200 hover:bg-gray-50'
-                      }`}
+                      style={{
+                        border: `2px solid ${selectedReportsForComparison.includes(report.id) ? '#ea580c' : 'var(--border-color)'}`,
+                        padding: '15px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        background: selectedReportsForComparison.includes(report.id) ? '#fff7ed' : 'white'
+                      }}
                       onClick={() => toggleReportSelection(report.id)}
+                      onMouseEnter={(e) => {
+                        if (!selectedReportsForComparison.includes(report.id)) {
+                          e.currentTarget.style.background = '#f9fafb';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!selectedReportsForComparison.includes(report.id)) {
+                          e.currentTarget.style.background = 'white';
+                        }
+                      }}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-1">
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <div style={{ marginTop: '2px' }}>
                           <input
                             type="checkbox"
                             checked={selectedReportsForComparison.includes(report.id)}
                             onChange={() => {}}
-                            className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300"
+                            style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                           />
                         </div>
-                        <div className="flex-1">
-                          <h3 className="text-sm font-semibold text-gray-900">{report.report_name}</h3>
+                        <div style={{ flex: 1 }}>
+                          <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
+                            {report.report_name}
+                          </h3>
                           {report.report_description && (
-                            <p className="text-xs text-gray-600 mt-1">{report.report_description}</p>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                              {report.report_description}
+                            </p>
                           )}
-                          <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                            <span>
-                              Saved: {new Date(report.saved_at).toLocaleDateString()}
-                            </span>
+                          <div style={{ display: 'flex', gap: '12px', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                            <span>Saved: {new Date(report.saved_at).toLocaleDateString()}</span>
                             {report.report_summary && (
-                              <span className={report.report_summary.net_cash_flow >= 0 ? 'text-green-600' : 'text-red-600'}>
+                              <span style={{ color: report.report_summary.net_cash_flow >= 0 ? '#059669' : '#dc2626' }}>
                                 Net: {formatCurrency(report.report_summary.net_cash_flow)}
                               </span>
                             )}
@@ -1700,25 +2136,41 @@ const CashFlow = () => {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                onClick={() => setShowCompareModal(false)}
+                className="modal-btn modal-btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={compareReports}
+                disabled={selectedReportsForComparison.length < 2}
+                className="modal-btn modal-btn-primary"
+                style={{ 
+                  opacity: selectedReportsForComparison.length < 2 ? 0.5 : 1,
+                  backgroundColor: '#ea580c'
+                }}
+              >
+                <FontAwesomeIcon icon={faMoneyBillWave} style={{ marginRight: '6px' }} />
+                Compare {selectedReportsForComparison.length} Reports
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowCompareModal(false)}
-                    className="flex-1 px-4 py-2 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={compareReports}
-                    disabled={selectedReportsForComparison.length < 2}
-                    className="flex-1 px-4 py-2 text-xs font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                  >
-                    <FontAwesomeIcon icon={faMoneyBillWave} className="mr-1" />
-                    Compare {selectedReportsForComparison.length} Reports
-                  </button>
-                </div>
-              </>
-            )}
+      {/* Success Toast */}
+      {toast.visible && toast.message && (
+        <div className="success-toast">
+          <div 
+            className="success-toast-content" 
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
           </div>
         </div>
       )}

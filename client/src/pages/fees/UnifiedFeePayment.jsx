@@ -205,7 +205,7 @@ const UnifiedFeePayment = () => {
                     <head>
                         <title>Payment Receipt</title>
                         <style>
-                            body { font-family: Arial, sans-serif; margin: 20px; }
+                            body { font-family: 'Nunito', sans-serif; margin: 20px; }
                             .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
                             .receipt-details { margin-bottom: 20px; }
                             .receipt-details table { width: 100%; border-collapse: collapse; }

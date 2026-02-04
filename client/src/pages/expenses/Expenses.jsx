@@ -387,8 +387,18 @@ const Expenses = () => {
         height: '100%'
       }}>
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading expenses...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading expenses...</p>
           </div>
         ) : error ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#dc2626', fontSize: '0.75rem' }}>

@@ -288,14 +288,6 @@ const StudentFeePayments = () => {
     displayRows.push(null);
   }
 
-  if (loadingStudents && students.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading students...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="reports-container" style={{ 
       height: '100%', 

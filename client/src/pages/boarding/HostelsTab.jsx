@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faEye, faEdit, faTrash, faSearch, faBuilding } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faEye, faEdit, faTrash, faSearch, faBuilding, faDoorOpen } from '@fortawesome/free-solid-svg-icons';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
 import BASE_URL from '../../contexts/Api';
@@ -11,6 +11,7 @@ const HostelsTab = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [genderFilter, setGenderFilter] = useState('All'); // 'All', 'Male', 'Female'
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalHostels, setTotalHostels] = useState(0);
@@ -24,7 +25,9 @@ const HostelsTab = () => {
     name: '',
     description: '',
     location: '',
-    gender: 'Male'
+    gender: 'Male',
+    total_rooms: 0,
+    total_capacity: 0
   });
   
   // Toast states
@@ -34,6 +37,8 @@ const HostelsTab = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewModalLoading, setViewModalLoading] = useState(false);
   const [selectedHostel, setSelectedHostel] = useState(null);
+  const [hostelRooms, setHostelRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
   
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -43,7 +48,9 @@ const HostelsTab = () => {
     name: '',
     description: '',
     location: '',
-    gender: 'Male'
+    gender: 'Male',
+    total_rooms: 0,
+    total_capacity: 0
   });
   const [editFormError, setEditFormError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -52,12 +59,29 @@ const HostelsTab = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [hostelToDelete, setHostelToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Room management states
+  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
+  const [showEditRoomModal, setShowEditRoomModal] = useState(false);
+  const [showDeleteRoomModal, setShowDeleteRoomModal] = useState(false);
+  const [roomFormData, setRoomFormData] = useState({
+    room_number: '',
+    room_type: 'Single',
+    capacity: 1,
+    floor_number: 1,
+    description: ''
+  });
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [roomFormError, setRoomFormError] = useState(null);
+  const [isSavingRoom, setIsSavingRoom] = useState(false);
+  const [isDeletingRoom, setIsDeletingRoom] = useState(false);
+  
 
   const { token } = useAuth();
 
   useEffect(() => {
     fetchHostels();
-  }, [currentPage, activeSearchTerm]);
+  }, [currentPage, activeSearchTerm, genderFilter]);
 
   const fetchHostels = async () => {
     try {
@@ -80,11 +104,16 @@ const HostelsTab = () => {
 
         const allHostels = response.data.data || [];
         const searchLower = activeSearchTerm.trim().toLowerCase();
-        const filtered = allHostels.filter(hostel =>
+        let filtered = allHostels.filter(hostel =>
           (hostel.name && hostel.name.toLowerCase().includes(searchLower)) ||
           (hostel.location && hostel.location.toLowerCase().includes(searchLower)) ||
           (hostel.description && hostel.description.toLowerCase().includes(searchLower))
         );
+        
+        // Apply gender filter
+        if (genderFilter !== 'All') {
+          filtered = filtered.filter(hostel => hostel.gender === genderFilter);
+        }
         
         setHostels(filtered);
         setTotalPages(1);
@@ -101,7 +130,12 @@ const HostelsTab = () => {
 
         const data = response.data;
         console.log('📊 Raw response:', data);
-        const allHostels = data.data || [];
+        let allHostels = data.data || [];
+        
+        // Apply gender filter
+        if (genderFilter !== 'All') {
+          allHostels = allHostels.filter(hostel => hostel.gender === genderFilter);
+        }
         
         // Client-side pagination
         const startIndex = (currentPage - 1) * limit;
@@ -141,6 +175,11 @@ const HostelsTab = () => {
     setCurrentPage(1);
   };
 
+  const handleGenderFilterChange = (e) => {
+    setGenderFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
   // Modal functions
   const handleOpenModal = () => {
     setShowAddModal(true);
@@ -158,13 +197,18 @@ const HostelsTab = () => {
       name: '',
       description: '',
       location: '',
-      gender: 'Male'
+      gender: 'Male',
+      total_rooms: 0,
+      total_capacity: 0
     });
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: (name === 'total_rooms' || name === 'total_capacity') ? parseInt(value) || 0 : value 
+    }));
   };
 
   const handleSave = async (e) => {
@@ -217,6 +261,7 @@ const HostelsTab = () => {
     setShowViewModal(true);
     setViewModalLoading(true);
     setSelectedHostel(null);
+    setHostelRooms([]);
 
     try {
       const response = await axios.get(`${BASE_URL}/boarding/hostels/${hostelId}`, {
@@ -227,6 +272,23 @@ const HostelsTab = () => {
       });
 
       setSelectedHostel(response.data.data);
+      
+      // Fetch rooms for this hostel
+      setRoomsLoading(true);
+      try {
+        const roomsResponse = await axios.get(`${BASE_URL}/boarding/hostels/${hostelId}/rooms`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        setHostelRooms(roomsResponse.data.data || []);
+      } catch (roomsErr) {
+        console.error('Error fetching rooms:', roomsErr);
+        setHostelRooms([]);
+      } finally {
+        setRoomsLoading(false);
+      }
     } catch (err) {
       console.error('Error fetching hostel:', err);
       showToast('Failed to load hostel details', 'error');
@@ -240,6 +302,7 @@ const HostelsTab = () => {
     setShowViewModal(false);
     setSelectedHostel(null);
     setViewModalLoading(false);
+    setHostelRooms([]);
   };
 
   // Edit modal functions
@@ -252,7 +315,9 @@ const HostelsTab = () => {
       name: '',
       description: '',
       location: '',
-      gender: 'Male'
+      gender: 'Male',
+      total_rooms: 0,
+      total_capacity: 0
     });
 
     try {
@@ -270,7 +335,9 @@ const HostelsTab = () => {
         name: hostelData.name || '',
         description: hostelData.description || '',
         location: hostelData.location || '',
-        gender: hostelData.gender || 'Male'
+        gender: hostelData.gender || 'Male',
+        total_rooms: hostelData.total_rooms || 0,
+        total_capacity: hostelData.total_capacity || 0
       });
     } catch (err) {
       console.error('Error fetching hostel for edit:', err);
@@ -288,7 +355,9 @@ const HostelsTab = () => {
       name: '',
       description: '',
       location: '',
-      gender: 'Male'
+      gender: 'Male',
+      total_rooms: 0,
+      total_capacity: 0
     });
     setEditFormError(null);
     setIsSaving(false);
@@ -389,6 +458,222 @@ const HostelsTab = () => {
     }
   };
 
+  // Room management functions
+  const handleAddRoom = () => {
+    if (!selectedHostel) return;
+    setRoomFormData({
+      room_number: '',
+      room_type: 'Single',
+      capacity: 1,
+      floor_number: 1,
+      description: ''
+    });
+    setRoomFormError(null);
+    setShowAddRoomModal(true);
+  };
+
+  const handleCloseAddRoomModal = () => {
+    setShowAddRoomModal(false);
+    setRoomFormData({
+      room_number: '',
+      room_type: 'Single',
+      capacity: 1,
+      floor_number: 1,
+      description: ''
+    });
+    setRoomFormError(null);
+  };
+
+  const handleRoomInputChange = (e) => {
+    const { name, value } = e.target;
+    setRoomFormData(prev => ({ 
+      ...prev, 
+      [name]: (name === 'capacity' || name === 'floor_number') ? parseInt(value) || 0 : value 
+    }));
+  };
+
+  const handleSaveRoom = async (e) => {
+    e.preventDefault();
+    if (!selectedHostel) return;
+
+    setIsSavingRoom(true);
+    setRoomFormError(null);
+
+    try {
+      const response = await axios.post(`${BASE_URL}/boarding/rooms`, {
+        ...roomFormData,
+        hostel_id: selectedHostel.id
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data.success) {
+        // Refresh rooms list
+        const roomsResponse = await axios.get(`${BASE_URL}/boarding/hostels/${selectedHostel.id}/rooms`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        setHostelRooms(roomsResponse.data.data || []);
+        
+        handleCloseAddRoomModal();
+        showToast(`Room ${roomFormData.room_number} has been successfully added!`, 'success');
+      } else {
+        setRoomFormError(response.data.message || 'Failed to create room');
+      }
+    } catch (err) {
+      console.error('Error creating room:', err);
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (err.response) {
+        const errorData = err.response.data;
+        if (errorData?.error) {
+          errorMessage = errorData.error;
+        } else {
+          errorMessage = errorData?.message || `Server Error (${err.response.status})`;
+        }
+      } else if (err.request) {
+        errorMessage = 'No response from server. Please check your internet connection.';
+      } else {
+        errorMessage = err.message || 'An unexpected error occurred';
+      }
+      
+      setRoomFormError(errorMessage);
+    } finally {
+      setIsSavingRoom(false);
+    }
+  };
+
+  const handleEditRoom = (room) => {
+    setSelectedRoom(room);
+    setRoomFormData({
+      room_number: room.room_number || '',
+      room_type: room.room_type || 'Single',
+      capacity: room.capacity || 1,
+      floor_number: room.floor_number || 1,
+      description: room.description || ''
+    });
+    setRoomFormError(null);
+    setShowEditRoomModal(true);
+  };
+
+  const handleCloseEditRoomModal = () => {
+    setShowEditRoomModal(false);
+    setSelectedRoom(null);
+    setRoomFormData({
+      room_number: '',
+      room_type: 'Single',
+      capacity: 1,
+      floor_number: 1,
+      description: ''
+    });
+    setRoomFormError(null);
+  };
+
+  const handleUpdateRoom = async (e) => {
+    e.preventDefault();
+    if (!selectedRoom) return;
+
+    setIsSavingRoom(true);
+    setRoomFormError(null);
+
+    try {
+      await axios.put(`${BASE_URL}/boarding/rooms/${selectedRoom.id}`, roomFormData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Refresh rooms list
+      const roomsResponse = await axios.get(`${BASE_URL}/boarding/hostels/${selectedHostel.id}/rooms`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      setHostelRooms(roomsResponse.data.data || []);
+      
+      handleCloseEditRoomModal();
+      showToast(`Room ${roomFormData.room_number} has been successfully updated!`, 'success');
+    } catch (err) {
+      console.error('Error updating room:', err);
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (err.response) {
+        const errorData = err.response.data;
+        if (errorData?.error) {
+          errorMessage = errorData.error;
+        } else {
+          errorMessage = errorData?.message || `Server Error (${err.response.status})`;
+        }
+      } else if (err.request) {
+        errorMessage = 'No response from server. Please check your internet connection.';
+      } else {
+        errorMessage = err.message || 'An unexpected error occurred';
+      }
+      
+      setRoomFormError(errorMessage);
+    } finally {
+      setIsSavingRoom(false);
+    }
+  };
+
+  const handleDeleteRoomClick = (room) => {
+    setSelectedRoom(room);
+    setShowDeleteRoomModal(true);
+  };
+
+  const handleCloseDeleteRoomModal = () => {
+    setShowDeleteRoomModal(false);
+    setSelectedRoom(null);
+    setIsDeletingRoom(false);
+  };
+
+  const handleConfirmDeleteRoom = async () => {
+    if (!selectedRoom || !selectedHostel) return;
+
+    setIsDeletingRoom(true);
+    try {
+      await axios.delete(`${BASE_URL}/boarding/rooms/${selectedRoom.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Refresh rooms list
+      const roomsResponse = await axios.get(`${BASE_URL}/boarding/hostels/${selectedHostel.id}/rooms`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      setHostelRooms(roomsResponse.data.data || []);
+      
+      handleCloseDeleteRoomModal();
+      showToast(`Room ${selectedRoom.room_number} has been successfully deleted!`, 'success');
+    } catch (err) {
+      console.error('Error deleting room:', err);
+      let errorMessage = 'Failed to delete room';
+      
+      if (err.response) {
+        errorMessage = err.response.data?.message || `Server Error (${err.response.status})`;
+      } else if (err.request) {
+        errorMessage = 'No response from server. Please check your internet connection.';
+      }
+      
+      showToast(errorMessage, 'error');
+    } finally {
+      setIsDeletingRoom(false);
+    }
+  };
+
+
   // Toast functions
   const showToast = (message, type = 'success', duration = 3000) => {
     setToast({ message, type, visible: true });
@@ -467,14 +752,6 @@ const HostelsTab = () => {
   const displayEnd = Math.min(currentPage * limit, totalHostels);
   const hasData = hostels.length > 0;
 
-  if (loading && hostels.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading hostels...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="reports-container" style={{ 
       height: '100%', 
@@ -545,6 +822,21 @@ const HostelsTab = () => {
               )}
             </div>
           </form>
+
+          {/* Gender Filter */}
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px' }}>Hostel Type:</label>
+            <select
+              value={genderFilter}
+              onChange={handleGenderFilterChange}
+              className="filter-input"
+              style={{ minWidth: '150px', width: '150px' }}
+            >
+              <option value="All">All Hostels</option>
+              <option value="Male">Boys Hostel</option>
+              <option value="Female">Girls Hostel</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -566,8 +858,18 @@ const HostelsTab = () => {
         height: '100%'
       }}>
         {loading && hostels.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading hostels...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading hostels...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
@@ -602,7 +904,7 @@ const HostelsTab = () => {
                     {hostel.location || 'N/A'}
                   </td>
                   <td style={{ padding: '4px 10px' }}>
-                    {hostel.gender || 'N/A'}
+                    {hostel.gender === 'Male' ? 'Boys Hostel' : hostel.gender === 'Female' ? 'Girls Hostel' : hostel.gender || 'N/A'}
                   </td>
                   <td style={{ padding: '4px 10px' }}>
                     {hostel.total_rooms || 0}
@@ -783,7 +1085,7 @@ const HostelsTab = () => {
                     
                     <div className="form-group">
                       <label className="form-label">
-                        Gender <span className="required">*</span>
+                        Are you creating a girls or boys hostel? <span className="required">*</span>
                       </label>
                       <select
                         name="gender"
@@ -792,9 +1094,41 @@ const HostelsTab = () => {
                         onChange={handleInputChange}
                         required
                       >
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
+                        <option value="Male">Boys Hostel</option>
+                        <option value="Female">Girls Hostel</option>
                       </select>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label">
+                        Total Rooms <span className="required">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="total_rooms"
+                        className="form-control"
+                        placeholder="Enter total number of rooms"
+                        value={formData.total_rooms}
+                        onChange={handleInputChange}
+                        min="0"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label">
+                        Total Capacity <span className="required">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="total_capacity"
+                        className="form-control"
+                        placeholder="Enter total capacity (number of students)"
+                        value={formData.total_capacity}
+                        onChange={handleInputChange}
+                        min="0"
+                        required
+                      />
                     </div>
                   </form>
                 </div>
@@ -823,7 +1157,7 @@ const HostelsTab = () => {
           <div 
             className="modal-dialog" 
             onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '600px', minHeight: viewModalLoading ? '400px' : 'auto' }}
+            style={{ maxWidth: '900px', minHeight: viewModalLoading ? '400px' : 'auto' }}
           >
             {viewModalLoading ? (
               // Loading State
@@ -887,7 +1221,7 @@ const HostelsTab = () => {
                             Gender
                           </div>
                           <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
-                            {selectedHostel.gender || 'N/A'}
+                            {selectedHostel.gender === 'Male' ? 'Boys Hostel' : selectedHostel.gender === 'Female' ? 'Girls Hostel' : selectedHostel.gender || 'N/A'}
                           </div>
                         </div>
                         
@@ -920,6 +1254,88 @@ const HostelsTab = () => {
                           </div>
                         )}
                       </div>
+                    </div>
+                    
+                    {/* Room Details Section */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <FontAwesomeIcon icon={faDoorOpen} style={{ color: '#2563eb' }} />
+                          Room Details
+                        </h4>
+                        <button
+                          onClick={handleAddRoom}
+                          className="btn-checklist"
+                          style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+                        >
+                          <FontAwesomeIcon icon={faPlus} style={{ marginRight: '6px' }} />
+                          Add Room
+                        </button>
+                      </div>
+                      
+                      {roomsLoading ? (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
+                          <div className="loading-spinner"></div>
+                          <p style={{ marginLeft: '12px', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading rooms...</p>
+                        </div>
+                      ) : hostelRooms.length > 0 ? (
+                        <div style={{ overflowX: 'auto' }}>
+                          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Room Number</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Room Type</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Floor</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Capacity</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Occupied</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Available</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'left' }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {hostelRooms.map((room, index) => (
+                                <tr 
+                                  key={room.id}
+                                  style={{ 
+                                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                                  }}
+                                >
+                                  <td style={{ padding: '8px 12px' }}>{room.room_number || 'N/A'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{room.room_type || 'N/A'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{room.floor_number || 'N/A'}</td>
+                                  <td style={{ padding: '8px 12px' }}>{room.capacity || 0}</td>
+                                  <td style={{ padding: '8px 12px' }}>{room.current_occupancy || room.current_enrollments || 0}</td>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    {(room.capacity || 0) - (room.current_occupancy || room.current_enrollments || 0)}
+                                  </td>
+                                  <td style={{ padding: '8px 12px' }}>
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                      <button
+                                        onClick={() => handleEditRoom(room)}
+                                        style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                        title="Edit"
+                                      >
+                                        <FontAwesomeIcon icon={faEdit} />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteRoomClick(room)}
+                                        style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                        title="Delete"
+                                      >
+                                        <FontAwesomeIcon icon={faTrash} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                          No rooms found for this hostel.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1024,7 +1440,7 @@ const HostelsTab = () => {
                     
                     <div className="form-group">
                       <label className="form-label">
-                        Gender <span className="required">*</span>
+                        Are you creating a girls or boys hostel? <span className="required">*</span>
                       </label>
                       <select
                         name="gender"
@@ -1033,9 +1449,41 @@ const HostelsTab = () => {
                         onChange={handleEditInputChange}
                         required
                       >
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
+                        <option value="Male">Boys Hostel</option>
+                        <option value="Female">Girls Hostel</option>
                       </select>
+                    </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label">
+                        Total Rooms <span className="required">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="total_rooms"
+                        className="form-control"
+                        placeholder="Enter total number of rooms"
+                        value={editFormData.total_rooms}
+                        onChange={handleEditInputChange}
+                        min="0"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="form-group">
+                      <label className="form-label">
+                        Total Capacity <span className="required">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="total_capacity"
+                        className="form-control"
+                        placeholder="Enter total capacity (number of students)"
+                        value={editFormData.total_capacity}
+                        onChange={handleEditInputChange}
+                        min="0"
+                        required
+                      />
                     </div>
                   </form>
                 </div>
@@ -1144,6 +1592,315 @@ const HostelsTab = () => {
           </div>
         </div>
       )}
+
+      {/* Add Room Modal */}
+      {showAddRoomModal && selectedHostel && (
+        <div className="modal-overlay" onClick={handleCloseAddRoomModal}>
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ maxWidth: '600px' }}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">Add Room - {selectedHostel.name}</h3>
+              <button className="modal-close-btn" onClick={handleCloseAddRoomModal}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              {roomFormError && (
+                <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
+                  {roomFormError}
+                </div>
+              )}
+              
+              <form onSubmit={handleSaveRoom} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">
+                    Room Number <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="room_number"
+                    className="form-control"
+                    placeholder="e.g., 101, A-12, etc."
+                    value={roomFormData.room_number}
+                    onChange={handleRoomInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    Room Type <span className="required">*</span>
+                  </label>
+                  <select
+                    name="room_type"
+                    className="form-control"
+                    value={roomFormData.room_type}
+                    onChange={handleRoomInputChange}
+                    required
+                  >
+                    <option value="Single">Single</option>
+                    <option value="Double">Double</option>
+                    <option value="Triple">Triple</option>
+                    <option value="Quad">Quad</option>
+                    <option value="Dormitory">Dormitory</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    Capacity (Number of People) <span className="required">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    className="form-control"
+                    placeholder="Enter number of people this room can hold"
+                    value={roomFormData.capacity}
+                    onChange={handleRoomInputChange}
+                    min="1"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    Floor Number <span className="required">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="floor_number"
+                    className="form-control"
+                    placeholder="Enter floor number"
+                    value={roomFormData.floor_number}
+                    onChange={handleRoomInputChange}
+                    min="1"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    name="description"
+                    className="form-control"
+                    placeholder="Enter room description (optional)"
+                    rows="3"
+                    value={roomFormData.description}
+                    onChange={handleRoomInputChange}
+                  />
+                </div>
+              </form>
+            </div>
+            
+            <div className="modal-footer">
+              <button className="modal-btn modal-btn-cancel" onClick={handleCloseAddRoomModal}>
+                Cancel
+              </button>
+              <button 
+                className="modal-btn modal-btn-confirm" 
+                onClick={handleSaveRoom}
+                disabled={!roomFormData.room_number || !roomFormData.capacity || isSavingRoom}
+              >
+                {isSavingRoom ? 'Saving...' : 'Add Room'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Room Modal */}
+      {showEditRoomModal && selectedRoom && (
+        <div className="modal-overlay" onClick={handleCloseEditRoomModal}>
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ maxWidth: '600px' }}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Room - {selectedRoom.room_number}</h3>
+              <button className="modal-close-btn" onClick={handleCloseEditRoomModal}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              {roomFormError && (
+                <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
+                  {roomFormError}
+                </div>
+              )}
+              
+              <form onSubmit={handleUpdateRoom} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">
+                    Room Number <span className="required">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="room_number"
+                    className="form-control"
+                    placeholder="e.g., 101, A-12, etc."
+                    value={roomFormData.room_number}
+                    onChange={handleRoomInputChange}
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    Room Type <span className="required">*</span>
+                  </label>
+                  <select
+                    name="room_type"
+                    className="form-control"
+                    value={roomFormData.room_type}
+                    onChange={handleRoomInputChange}
+                    required
+                  >
+                    <option value="Single">Single</option>
+                    <option value="Double">Double</option>
+                    <option value="Triple">Triple</option>
+                    <option value="Quad">Quad</option>
+                    <option value="Dormitory">Dormitory</option>
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    Capacity (Number of People) <span className="required">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="capacity"
+                    className="form-control"
+                    placeholder="Enter number of people this room can hold"
+                    value={roomFormData.capacity}
+                    onChange={handleRoomInputChange}
+                    min="1"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">
+                    Floor Number <span className="required">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="floor_number"
+                    className="form-control"
+                    placeholder="Enter floor number"
+                    value={roomFormData.floor_number}
+                    onChange={handleRoomInputChange}
+                    min="1"
+                    required
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    name="description"
+                    className="form-control"
+                    placeholder="Enter room description (optional)"
+                    rows="3"
+                    value={roomFormData.description}
+                    onChange={handleRoomInputChange}
+                  />
+                </div>
+              </form>
+            </div>
+            
+            <div className="modal-footer">
+              <button className="modal-btn modal-btn-cancel" onClick={handleCloseEditRoomModal}>
+                Cancel
+              </button>
+              <button 
+                className="modal-btn modal-btn-confirm" 
+                onClick={handleUpdateRoom}
+                disabled={!roomFormData.room_number || !roomFormData.capacity || isSavingRoom}
+              >
+                {isSavingRoom ? 'Saving...' : 'Update Room'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Room Confirmation Modal */}
+      {showDeleteRoomModal && selectedRoom && (
+        <div className="modal-overlay" onClick={handleCloseDeleteRoomModal}>
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
+            style={{ maxWidth: '500px' }}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">Confirm Delete</h3>
+              <button className="modal-close-btn" onClick={handleCloseDeleteRoomModal}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="modal-body">
+              <p style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>
+                Are you sure you want to delete room <strong>{selectedRoom.room_number}</strong>? This action cannot be undone.
+              </p>
+              
+              <div style={{ 
+                padding: '12px', 
+                background: '#f9fafb', 
+                borderRadius: '4px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Room Information
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  <strong>Room Number:</strong> {selectedRoom.room_number}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  <strong>Room Type:</strong> {selectedRoom.room_type || 'N/A'}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  <strong>Capacity:</strong> {selectedRoom.capacity || 0} people
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="modal-btn modal-btn-cancel" 
+                onClick={handleCloseDeleteRoomModal}
+                disabled={isDeletingRoom}
+              >
+                Cancel
+              </button>
+              <button 
+                className="modal-btn modal-btn-delete" 
+                onClick={handleConfirmDeleteRoom}
+                disabled={isDeletingRoom}
+              >
+                {isDeletingRoom ? 'Deleting...' : 'Delete Room'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Success Toast */}
       {toast.visible && toast.message && (

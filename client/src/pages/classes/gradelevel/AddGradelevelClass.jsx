@@ -91,6 +91,10 @@ const AddGradelevelClass = ({ onClose }) => {
   };
 
   const validateForm = () => {
+    if (streams.length === 0) {
+      setError('Add streams first in the Configurations tab on the Classes page.');
+      return false;
+    }
     if (!formData.stream_id) {
       setError('Stream is required');
       return false;
@@ -158,6 +162,19 @@ const AddGradelevelClass = ({ onClose }) => {
         </div>
       )}
 
+      {streams.length === 0 && (
+        <div style={{
+          padding: '12px 16px',
+          marginBottom: '16px',
+          background: '#fef3c7',
+          border: '1px solid #fcd34d',
+          borderRadius: '8px',
+          color: '#92400e',
+          fontSize: '0.875rem'
+        }}>
+          No streams yet. Add streams first under the <strong>Configurations</strong> tab on the Classes page, then come back to add a grade level class.
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="modal-form">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
           <div className="form-group">
@@ -170,8 +187,9 @@ const AddGradelevelClass = ({ onClose }) => {
               onChange={handleInputChange}
               className="form-control"
               required
+              disabled={streams.length === 0}
             >
-              <option value="">Select Stream</option>
+              <option value="">{streams.length === 0 ? 'Add streams in Configurations first' : 'Select Stream'}</option>
               {streams.map((stream) => (
                 <option key={stream.id} value={stream.id}>
                   {stream.name} ({stream.stage})

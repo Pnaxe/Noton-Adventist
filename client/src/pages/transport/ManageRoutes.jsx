@@ -218,14 +218,6 @@ const ManageRoutes = () => {
     );
   };
 
-  if (loading && routes.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading routes...</div>
-      </div>
-    );
-  }
-
   // Calculate display ranges for pagination
   const displayStart = routes.length > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
   const displayEnd = Math.min(pagination.page * pagination.limit, pagination.total);
@@ -374,8 +366,18 @@ const ManageRoutes = () => {
         height: '100%'
       }}>
         {loading && routes.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading routes...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading routes...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>

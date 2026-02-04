@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStudentAuth } from '../contexts/StudentAuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -10,10 +10,12 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import BASE_URL from '../contexts/Api';
 
+const currentYear = new Date().getFullYear().toString();
+
 const Results = () => {
   const { student, token } = useStudentAuth();
-  const [searchYear, setSearchYear] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchYear, setSearchYear] = useState(currentYear);
+  const [searchTerm, setSearchTerm] = useState('Term 1');
   const [results, setResults] = useState([]);
   const [allResults, setAllResults] = useState([]); // Store all results for pagination
   const [loading, setLoading] = useState(false);
@@ -24,10 +26,20 @@ const Results = () => {
   const [streamPosition, setStreamPosition] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [limit] = useState(25);
+  const hasAutoLoaded = useRef(false);
 
   useEffect(() => {
     fetchBalanceStatus();
   }, []);
+
+  // Auto-load current results on mount (current year + Term 1) so results show without searching
+  useEffect(() => {
+    if (!token || hasAutoLoaded.current) return;
+    hasAutoLoaded.current = true;
+    fetchResults(currentYear, 'Term 1');
+    // fetchResults is stable enough; we only want to run once when token is available
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const fetchBalanceStatus = async () => {
     try {
@@ -47,20 +59,15 @@ const Results = () => {
     }
   };
 
-  const handleSearch = async (e) => {
-    e?.preventDefault();
-    if (!searchYear || !searchTerm) {
-      setError('Please select both academic year and term');
-      return;
-    }
-
+  const fetchResults = async (year, term) => {
+    if (!year || !term) return;
     setLoading(true);
     setError('');
     setHasSearched(true);
 
     try {
       const response = await fetch(
-        `${BASE_URL}/student-results/results?academic_year=${searchYear}&term=${searchTerm}`,
+        `${BASE_URL}/student-results/results?academic_year=${year}&term=${term}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -78,6 +85,9 @@ const Results = () => {
           setError('You cannot view results due to outstanding balance. Please clear your account balance first.');
         }
         setResults([]);
+        setAllResults([]);
+        setClassPosition(null);
+        setStreamPosition(null);
         return;
       }
 
@@ -86,8 +96,12 @@ const Results = () => {
         setAllResults(fetchedResults);
         setClassPosition(data.data.class_position || null);
         setStreamPosition(data.data.stream_position || null);
-        setError('');
-        setCurrentPage(1); // Reset to first page on new search
+        setCurrentPage(1);
+        if (data.data.not_published && data.data.message) {
+          setError(data.data.message);
+        } else {
+          setError('');
+        }
       } else {
         setError(data.message || 'Failed to fetch results');
         setResults([]);
@@ -95,8 +109,8 @@ const Results = () => {
         setClassPosition(null);
         setStreamPosition(null);
       }
-      } catch (error) {
-      console.error('Error fetching results:', error);
+    } catch (err) {
+      console.error('Error fetching results:', err);
       setError('Failed to fetch results');
       setResults([]);
       setAllResults([]);
@@ -105,6 +119,15 @@ const Results = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSearch = async (e) => {
+    e?.preventDefault();
+    if (!searchYear || !searchTerm) {
+      setError('Please select both academic year and term');
+      return;
+    }
+    await fetchResults(searchYear, searchTerm);
   };
 
   // Pagination logic - slice results based on current page

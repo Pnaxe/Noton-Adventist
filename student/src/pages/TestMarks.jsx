@@ -22,6 +22,7 @@ const TestMarks = () => {
   const [allTests, setAllTests] = useState([]); // Store all tests for pagination
   const [testMarks, setTestMarks] = useState([]);
   const [subjectClasses, setSubjectClasses] = useState([]);
+  const [subjectClassesFetched, setSubjectClassesFetched] = useState(false);
   
   // Modal states
   const [showViewMarksModal, setShowViewMarksModal] = useState(false);
@@ -84,16 +85,23 @@ const TestMarks = () => {
       
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ Subject classes data:', data);
-        setSubjectClasses(data.data || []);
+        const classes = data.data || [];
+        setSubjectClasses(classes);
+        setSubjectClassesFetched(true);
+        // Auto-select first class so tests load without student having to pick (student is already in a class)
+        if (classes.length > 0) {
+          setSelectedClass(classes[0].subject_class_id);
+        }
       } else {
         const errorText = await response.text();
         console.error('❌ Subject classes response error:', errorText);
         setError('Failed to fetch subject classes');
+        setSubjectClassesFetched(true);
       }
     } catch (error) {
       console.error('❌ Error fetching subject classes:', error);
       setError('Failed to fetch subject classes');
+      setSubjectClassesFetched(true);
     }
   };
 
@@ -229,127 +237,99 @@ const TestMarks = () => {
         </div>
       )}
 
-      {/* Filters Section */}
+      {/* Filters Section - no class filter; student's class is auto-selected */}
       <div className="report-filters" style={{ flexShrink: 0 }}>
         <div className="report-filters-left">
-          {/* Subject Class Filter */}
           <div className="filter-group">
-            <label className="filter-label" style={{ marginRight: '8px' }}>Subject Class:</label>
+            <label className="filter-label" style={{ marginRight: '8px' }}>Academic Year:</label>
             <select
-              value={selectedClass}
-              onChange={(e) => {
-                setSelectedClass(e.target.value);
-                setCurrentPage(1);
-              }}
+              name="academic_year"
+              value={filters.academic_year}
+              onChange={handleFilterChange}
               className="filter-input"
-              style={{ minWidth: '250px', width: '250px' }}
+              style={{ minWidth: '140px', width: '140px' }}
             >
-              <option value="">Select a Subject Class</option>
-              {subjectClasses.map(cls => (
-                <option key={cls.subject_class_id} value={cls.subject_class_id}>
-                  {cls.subject_name} - {cls.gradelevel_class_name || cls.stream_name}
-                </option>
-              ))}
+              <option value="">All Years</option>
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2023">2023</option>
             </select>
           </div>
 
-          {/* Academic Year Filter */}
-          {selectedClass && (
-            <>
-              <div className="filter-group">
-                <label className="filter-label" style={{ marginRight: '8px' }}>Academic Year:</label>
-                <select
-                  name="academic_year"
-                  value={filters.academic_year}
-                  onChange={handleFilterChange}
-                  className="filter-input"
-                  style={{ minWidth: '140px', width: '140px' }}
-                >
-                  <option value="">All Years</option>
-                  <option value="2024">2024</option>
-                  <option value="2025">2025</option>
-                  <option value="2023">2023</option>
-                </select>
-              </div>
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px' }}>Term:</label>
+            <select
+              name="term"
+              value={filters.term}
+              onChange={handleFilterChange}
+              className="filter-input"
+              style={{ minWidth: '140px', width: '140px' }}
+            >
+              <option value="">All Terms</option>
+              <option value="1">Term 1</option>
+              <option value="2">Term 2</option>
+              <option value="3">Term 3</option>
+            </select>
+          </div>
 
-              {/* Term Filter */}
-              <div className="filter-group">
-                <label className="filter-label" style={{ marginRight: '8px' }}>Term:</label>
-                <select
-                  name="term"
-                  value={filters.term}
-                  onChange={handleFilterChange}
-                  className="filter-input"
-                  style={{ minWidth: '140px', width: '140px' }}
-                >
-                  <option value="">All Terms</option>
-                  <option value="1">Term 1</option>
-                  <option value="2">Term 2</option>
-                  <option value="3">Term 3</option>
-                </select>
-              </div>
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px' }}>Test Type:</label>
+            <select
+              name="test_type"
+              value={filters.test_type}
+              onChange={handleFilterChange}
+              className="filter-input"
+              style={{ minWidth: '140px', width: '140px' }}
+            >
+              <option value="">All Types</option>
+              <option value="quiz">Quiz</option>
+              <option value="assignment">Assignment</option>
+              <option value="test">Test</option>
+              <option value="exam">Exam</option>
+              <option value="project">Project</option>
+            </select>
+          </div>
 
-              {/* Test Type Filter */}
-              <div className="filter-group">
-                <label className="filter-label" style={{ marginRight: '8px' }}>Test Type:</label>
-                <select
-                  name="test_type"
-                  value={filters.test_type}
-                  onChange={handleFilterChange}
-                  className="filter-input"
-                  style={{ minWidth: '140px', width: '140px' }}
+          <form onSubmit={handleSearch} className="filter-group">
+            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <FontAwesomeIcon icon={faSearch} className="search-icon" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search tests..."
+                className="filter-input search-input"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    padding: '4px 6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '20px',
+                    height: '20px'
+                  }}
+                  title="Clear search"
                 >
-                  <option value="">All Types</option>
-                  <option value="quiz">Quiz</option>
-                  <option value="assignment">Assignment</option>
-                  <option value="test">Test</option>
-                  <option value="exam">Exam</option>
-                  <option value="project">Project</option>
-                </select>
-              </div>
-
-              {/* Search */}
-              <form onSubmit={handleSearch} className="filter-group">
-                <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <FontAwesomeIcon icon={faSearch} className="search-icon" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search tests..."
-                    className="filter-input search-input"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => {
-                        setSearchTerm('');
-                        setCurrentPage(1);
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        padding: '4px 6px',
-                        background: 'transparent',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '1rem',
-                        color: 'var(--text-secondary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        width: '20px',
-                        height: '20px'
-                      }}
-                      title="Clear search"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </form>
-            </>
-          )}
+                  ×
+                </button>
+              )}
+            </div>
+          </form>
         </div>
       </div>
 
@@ -366,6 +346,12 @@ const TestMarks = () => {
         {isLoading && !selectedClass ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
             Loading tests...
+          </div>
+        ) : subjectClassesFetched && !selectedClass ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b', gap: '12px' }}>
+            <FontAwesomeIcon icon={faBookOpen} style={{ fontSize: '2rem', opacity: 0.5 }} />
+            <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>No subject class</div>
+            <div style={{ fontSize: '0.75rem' }}>You are not enrolled in any subject class yet.</div>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>

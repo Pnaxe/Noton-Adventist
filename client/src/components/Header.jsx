@@ -26,7 +26,8 @@ import {
   faHandHoldingUsd,
   faFileContract,
   faUserShield,
-  faKey
+  faKey,
+  faUserPlus
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSports } from '../contexts/SportsContext';
@@ -34,8 +35,9 @@ import { useAccounting } from '../contexts/AccountingContext';
 import { useInventory } from '../contexts/InventoryContext';
 import { useBilling } from '../contexts/BillingContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { useBoarding } from '../contexts/BoardingContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import logo from '../assets/brooklyne.png';
+import logo from '../assets/norton_logo.png';
 
 const Header = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
@@ -64,13 +66,16 @@ const Header = ({ onMenuClick }) => {
   const settingsContext = useSettings();
   const { activeTab: activeSettingsTab, setActiveTab: onSettingsTabChange } = settingsContext;
 
+  // Get boarding context (will return default if not in provider)
+  const boardingContext = useBoarding();
+  const { activeTab: activeBoardingTab, setActiveTab: onBoardingTabChange } = boardingContext;
+
   // Check if we're on the sports page
   const isSportsPage = location.pathname.startsWith('/dashboard/sports');
 
   // Check if we're on an accounting page
   const isAccountingPage = location.pathname.startsWith('/dashboard/accounting') || 
                            location.pathname.startsWith('/dashboard/expenses') ||
-                           location.pathname.startsWith('/dashboard/procurement') ||
                            location.pathname.startsWith('/dashboard/assets') ||
                            location.pathname.startsWith('/dashboard/reports');
 
@@ -83,6 +88,9 @@ const Header = ({ onMenuClick }) => {
   // Check if we're on a settings page
   const isSettingsPage = location.pathname.startsWith('/dashboard/settings');
 
+  // Check if we're on a boarding page
+  const isBoardingPage = location.pathname.startsWith('/dashboard/boarding');
+
   // Set active accounting tab based on current route
   useEffect(() => {
     if (isAccountingPage && onAccountingTabChange) {
@@ -90,8 +98,6 @@ const Header = ({ onMenuClick }) => {
         onAccountingTabChange('chart-of-accounts');
       } else if (location.pathname.startsWith('/dashboard/expenses')) {
         onAccountingTabChange('expenses');
-      } else if (location.pathname.startsWith('/dashboard/procurement')) {
-        onAccountingTabChange('procurement');
       } else if (location.pathname.startsWith('/dashboard/assets')) {
         onAccountingTabChange('fixed-assets');
       } else if (location.pathname.startsWith('/dashboard/reports')) {
@@ -116,14 +122,26 @@ const Header = ({ onMenuClick }) => {
     }
   }, [location.pathname, isBillingPage, onBillingTabChange]);
 
+  // Set active boarding tab based on current route
+  useEffect(() => {
+    if (isBoardingPage && onBoardingTabChange) {
+      // Check URL query parameter or path to determine tab
+      const params = new URLSearchParams(location.search);
+      const tab = params.get('tab');
+      if (tab === 'configuration') {
+        onBoardingTabChange('configuration');
+      } else {
+        onBoardingTabChange('allocation');
+      }
+    }
+  }, [location.pathname, location.search, isBoardingPage, onBoardingTabChange]);
+
   // Determine active accounting tab from route (for display)
   const getActiveAccountingTab = () => {
     if (location.pathname.startsWith('/dashboard/accounting')) {
       return 'chart-of-accounts';
     } else if (location.pathname.startsWith('/dashboard/expenses')) {
       return 'expenses';
-    } else if (location.pathname.startsWith('/dashboard/procurement')) {
-      return 'procurement';
     } else if (location.pathname.startsWith('/dashboard/assets')) {
       return 'fixed-assets';
     } else if (location.pathname.startsWith('/dashboard/reports')) {
@@ -197,7 +215,7 @@ const Header = ({ onMenuClick }) => {
             color: 'var(--text-primary)',
             marginLeft: '4px',
             whiteSpace: 'nowrap'
-          }}>Brooklyn Private School</span>
+          }}>Norton Adventist</span>
         </div>
 
         {/* Center - Sports Navigation Menu */}
@@ -269,7 +287,6 @@ const Header = ({ onMenuClick }) => {
             {[
               { id: 'chart-of-accounts', label: 'Chart of Accounts', icon: faMoneyBillWave, path: '/dashboard/accounting/chart-of-accounts' },
               { id: 'expenses', label: 'Expenses', icon: faShoppingCart, path: '/dashboard/expenses/expenses' },
-              { id: 'procurement', label: 'Procurement', icon: faList, path: '/dashboard/procurement' },
               { id: 'fixed-assets', label: 'Fixed Assets', icon: faWarehouse, path: '/dashboard/assets' },
               { id: 'financial-reports', label: 'Financial Reports', icon: faChartLine, path: '/dashboard/reports/income-statement' }
             ].map(tab => (
@@ -374,6 +391,65 @@ const Header = ({ onMenuClick }) => {
                 }}
                 onMouseLeave={(e) => {
                   if (activeBillingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {isBoardingPage && (
+          <div className="top-nav-center" style={{
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0'
+          }}>
+            {[
+              { id: 'allocation', label: 'Hostel Allocation', icon: faUserPlus, path: '/dashboard/boarding' },
+              { id: 'configuration', label: 'Hostel Configuration', icon: faBed, path: '/dashboard/boarding?tab=configuration' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  if (onBoardingTabChange) {
+                    onBoardingTabChange(tab.id);
+                  }
+                  navigate(tab.path);
+                }}
+                className={`top-nav-menu-item ${activeBoardingTab === tab.id ? 'active' : ''}`}
+                style={{
+                  padding: '12px 20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: activeBoardingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
+                  borderBottom: activeBoardingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeBoardingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeBoardingTab !== tab.id) {
                     e.currentTarget.style.color = 'var(--text-secondary)';
                     e.currentTarget.style.background = 'transparent';
                   }

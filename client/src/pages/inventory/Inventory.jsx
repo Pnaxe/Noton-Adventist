@@ -55,21 +55,21 @@ const Inventory = () => {
   };
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
+      switch (activeTab) {
+        case 'dashboard':
         return <InventoryList ref={inventoryListRef} />;
-      default:
+        default:
         return <InventoryList ref={inventoryListRef} />;
-    }
+      }
   };
 
   return (
-    <div className="reports-container" style={{ 
-      height: '100%', 
-      maxHeight: '100%', 
-      overflow: 'hidden', 
-      display: 'flex', 
-      flexDirection: 'column', 
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
       position: 'relative' 
     }}>
       {/* Report Header */}
@@ -93,13 +93,13 @@ const Inventory = () => {
             <FontAwesomeIcon icon={faTshirt} />
             Issue Uniform
           </button>
-          <button
+              <button
             onClick={handleOpenCategories}
             className="btn-checklist"
-          >
+              >
             <FontAwesomeIcon icon={faCogs} />
             Categories
-          </button>
+              </button>
         </div>
       </div>
 

@@ -199,7 +199,7 @@ const Dashboard = () => {
     <div className="w-full space-y-6">
       {/* Header */}
       <div className="mb-6">
-        <h3 className="report-title">Welcome to Brooklyn</h3>
+        <h3 className="report-title">Welcome to Norton Adventist Secondary School</h3>
         <p className="report-subtitle">Dashboard Overview</p>
       </div>
 

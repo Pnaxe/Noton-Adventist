@@ -42,4 +42,13 @@ router.get('/student/:student_reg_number/summary', requireRole(['ADMIN', 'STUDEN
 // Get all waivers (admin view)
 router.get('/all', requireRole(['ADMIN', 'STUDENT_BILLING', 'MANAGER']), waiverController.getAllWaivers);
 
+// Get waiver by ID
+router.get('/:id', requireRole(['ADMIN', 'STUDENT_BILLING', 'MANAGER']), waiverController.getWaiverById);
+
+// Update waiver
+router.put('/:id', requireRole(['ADMIN', 'STUDENT_BILLING', 'MANAGER']), waiverController.updateWaiver);
+
+// Delete/Reverse waiver
+router.delete('/:id', requireRole(['ADMIN', 'STUDENT_BILLING', 'MANAGER']), waiverController.deleteWaiver);
+
 module.exports = router;

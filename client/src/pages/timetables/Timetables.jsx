@@ -502,14 +502,6 @@ const Timetables = () => {
   const displayEnd = Math.min(currentPage * limit, totalTemplates);
   const hasData = templates.length > 0;
 
-  if (loading && templates.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading timetables...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="reports-container" style={{
       height: '100%',
@@ -601,8 +593,18 @@ const Timetables = () => {
         height: '100%'
       }}>
         {loading && templates.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading timetables...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading timetables...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>

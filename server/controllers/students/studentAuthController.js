@@ -66,12 +66,14 @@ class StudentAuthController {
 
       const student = students[0];
 
-      // Check if this is first login (no password set)
-      if (!student.password) {
+      // First login = no password set (null, empty string, or whitespace-only)
+      const noPasswordSet = !student.password ||
+        (typeof student.password === 'string' && student.password.trim() === '');
+
+      if (noPasswordSet) {
         // For first login, use registration number as temporary password (case-insensitive)
-        const passwordTrimmed = password.trim();
-        const studentRegNumberTrimmed = student.RegNumber.trim();
-        // Compare case-insensitively
+        const passwordTrimmed = (password && typeof password === 'string' ? password : '').trim();
+        const studentRegNumberTrimmed = (student.RegNumber && String(student.RegNumber)).trim();
         if (passwordTrimmed.toLowerCase() !== studentRegNumberTrimmed.toLowerCase()) {
           console.log('❌ First login password mismatch:', {
             entered: passwordTrimmed,
@@ -79,15 +81,15 @@ class StudentAuthController {
           });
           return res.status(401).json({
             success: false,
-            message: 'First login detected. Please use your registration number as password to set up your account.',
+            message: 'First login: use your registration number as both username and password.',
             isFirstLogin: true
           });
         }
 
-        // Generate JWT token for first login
+        // Generate JWT token for first login (students table may not have id - use RegNumber as fallback)
         const token = jwt.sign(
           {
-            studentId: student.id,
+            studentId: student.id ?? student.RegNumber,
             regNumber: student.RegNumber,
             fullName: `${student.Name} ${student.Surname}`,
             userType: 'student',

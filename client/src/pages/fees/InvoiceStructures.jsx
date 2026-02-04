@@ -327,14 +327,6 @@ const InvoiceStructures = () => {
   const displayStart = invoiceStructures.length > 0 ? (pagination.currentPage - 1) * pagination.limit + 1 : 0;
   const displayEnd = Math.min(pagination.currentPage * pagination.limit, pagination.totalStructures);
 
-  if (loading && invoiceStructures.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading invoice structures...</div>
-      </div>
-    );
-  }
-
   return (
     <div className="reports-container" style={{
       height: '100%',
@@ -423,8 +415,18 @@ const InvoiceStructures = () => {
         height: '100%'
       }}>
         {tableLoading && invoiceStructures.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading invoice structures...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading invoice structures...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>

@@ -20,7 +20,6 @@ import {
   faWarehouse,
   faChartLine,
   faChartPie,
-  faCog,
   faSignOutAlt,
   faHome
 } from '@fortawesome/free-solid-svg-icons';
@@ -58,9 +57,6 @@ const Sidebar = ({ open, setOpen }) => {
 
     // 7. Reporting & Analytics
     { name: 'Analytics', href: '/dashboard/analytics/expense-analysis', icon: faChartPie },
-
-    // 8. System Administration
-    { name: 'Admin', href: '/dashboard/settings', icon: faCog },
   ];
 
   // Always show main sections - static menu

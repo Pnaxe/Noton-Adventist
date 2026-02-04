@@ -311,13 +311,24 @@ const Profile = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Navigation Tabs - scrollable so all headers are accessible on small screens */}
       <div className="report-filters" style={{ flexShrink: 0, paddingBottom: '0' }}>
-        <div className="report-filters-left" style={{ overflowX: 'auto', paddingBottom: '10px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div
+          className="report-filters-left"
+          style={{
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            paddingBottom: '10px',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            minWidth: 0,
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
           <style>{`
             .report-filters-left::-webkit-scrollbar { display: none; }
           `}</style>
-          <div className="flex space-x-1">
+          <div className="flex space-x-1" style={{ flexWrap: 'nowrap' }}>
             {tabs.map((tab) => (
               <button
                 key={tab.id}

@@ -62,52 +62,52 @@ class FeePaymentController {
 			// Calculate base currency amount
 			const base_currency_amount = payment_amount * exchange_rate;
 
-		// Use reference number as receipt number
-		const receipt_number = reference_number || `FP${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now()}`;
+			// Use reference number as receipt number
+			const receipt_number = reference_number || `FP${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now()}`;
 
-		// Check if a transaction already exists for this receipt number to prevent duplicates
-		const [existingTransaction] = await conn.execute(
-			`SELECT id FROM student_transactions 
+			// Check if a transaction already exists for this receipt number to prevent duplicates
+			const [existingTransaction] = await conn.execute(
+				`SELECT id FROM student_transactions 
 			 WHERE student_reg_number = ? 
 			 AND description LIKE ? 
 			 AND transaction_type = 'CREDIT'`,
-			[student_reg_number, `%Receipt #${receipt_number}%`]
-		);
+				[student_reg_number, `%Receipt #${receipt_number}%`]
+			);
 
-		if (existingTransaction.length > 0) {
-			await conn.rollback();
-			conn.release();
-			return res.status(400).json({
-				success: false,
-				message: `A payment with receipt number ${receipt_number} already exists for this student`
-			});
-		}
+			if (existingTransaction.length > 0) {
+				await conn.rollback();
+				conn.release();
+				return res.status(400).json({
+					success: false,
+					message: `A payment with receipt number ${receipt_number} already exists for this student`
+				});
+			}
 
-		// Create payment record
-		const [result] = await conn.execute(
-			`INSERT INTO fee_payments 
+			// Create payment record
+			const [result] = await conn.execute(
+				`INSERT INTO fee_payments 
 			 (student_reg_number, payment_amount, payment_currency, exchange_rate, 
 			  base_currency_amount, payment_method, payment_date, receipt_number, 
 			  reference_number, notes, created_by) 
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			[student_reg_number, payment_amount, payment_currency, exchange_rate,
-			 base_currency_amount, normalizedPaymentMethod, payment_date || new Date(), 
-			 receipt_number, reference_number || null, notes || null, req.user.id]
-		);
+				[student_reg_number, payment_amount, payment_currency, exchange_rate,
+					base_currency_amount, normalizedPaymentMethod, payment_date || new Date(),
+					receipt_number, reference_number || null, notes || null, req.user.id]
+			);
 
-		const paymentId = result.insertId;
+			const paymentId = result.insertId;
 
-		// Create CREDIT transaction and link it to the journal entry (will be set after journal creation)
-		const transactionId = await StudentTransactionController.createTransactionHelper(
-			student_reg_number,
-			'CREDIT',
-			base_currency_amount,
-			`Fee Payment - Receipt #${receipt_number}`,
-			{
-				created_by: req.user.id,
-				payment_id: paymentId
-			}
-		);
+			// Create CREDIT transaction and link it to the journal entry (will be set after journal creation)
+			const transactionId = await StudentTransactionController.createTransactionHelper(
+				student_reg_number,
+				'CREDIT',
+				base_currency_amount,
+				`Fee Payment - Receipt #${receipt_number}`,
+				{
+					created_by: req.user.id,
+					payment_id: paymentId
+				}
+			);
 
 			// Create journal entries for double-entry bookkeeping
 			const journalEntryData = {
@@ -123,16 +123,16 @@ class FeePaymentController {
 				notes,
 				created_by: req.user.id
 			};
-			
-		const journalEntryId = await FeePaymentController.createJournalEntries(conn, journalEntryData);
-		
-		// Link the transaction to the journal entry
-		await conn.execute(
-			'UPDATE student_transactions SET journal_entry_id = ? WHERE id = ?',
-			[journalEntryId, transactionId]
-		);
-		
-		// Update account balances (use payment currency for balance updates)
+
+			const journalEntryId = await FeePaymentController.createJournalEntries(conn, journalEntryData);
+
+			// Link the transaction to the journal entry
+			await conn.execute(
+				'UPDATE student_transactions SET journal_entry_id = ? WHERE id = ?',
+				[journalEntryId, transactionId]
+			);
+
+			// Update account balances (use payment currency for balance updates)
 			// Determine currency ID from payment_currency
 			let currencyIdForBalance = 1;
 			if (payment_currency) {
@@ -204,8 +204,14 @@ class FeePaymentController {
 			const { id } = req.params;
 
 			const [payments] = await pool.execute(
-				`SELECT fp.*, c.name as currency_name
+				`SELECT 
+				   fp.*,
+				   s.Name as student_name,
+				   s.Surname as student_surname,
+				   c.name as currency_name,
+				   c.symbol as currency_symbol
 				 FROM fee_payments fp
+				 LEFT JOIN students s ON fp.student_reg_number = s.RegNumber
 				 LEFT JOIN currencies c ON fp.payment_currency = c.id
 				 WHERE fp.id = ?`,
 				[id]
@@ -227,6 +233,113 @@ class FeePaymentController {
 			res.status(500).json({
 				success: false,
 				message: 'Failed to fetch payment',
+				error: error.message
+			});
+		}
+	}
+
+	// Get all payments with pagination and search
+	async getAllPayments(req, res) {
+		const conn = await pool.getConnection();
+		try {
+			const { page = 1, limit = 25, search = '', start_date = '', end_date = '', payment_method = '', currency_id = '' } = req.query;
+			const pageNum = parseInt(page);
+			const limitNum = parseInt(limit);
+			const offset = (pageNum - 1) * limitNum;
+
+			// Build WHERE clause for filtering
+			let whereConditions = ['1=1'];
+			let queryParams = [];
+
+			if (search) {
+				whereConditions.push('(s.Name LIKE ? OR s.Surname LIKE ? OR s.RegNumber LIKE ? OR fp.receipt_number LIKE ? OR fp.reference_number LIKE ?)');
+				const searchPattern = `%${search}%`;
+				queryParams.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+			}
+
+			if (start_date) {
+				whereConditions.push('DATE(fp.payment_date) >= ?');
+				queryParams.push(start_date);
+			}
+
+			if (end_date) {
+				whereConditions.push('DATE(fp.payment_date) <= ?');
+				queryParams.push(end_date);
+			}
+
+			if (payment_method) {
+				whereConditions.push('fp.payment_method = ?');
+				queryParams.push(payment_method);
+			}
+
+			if (currency_id) {
+				whereConditions.push('fp.payment_currency = ?');
+				queryParams.push(currency_id);
+			}
+
+			const whereClause = whereConditions.join(' AND ');
+
+			// Get total count
+			const [countResult] = await conn.query(
+				`SELECT COUNT(*) as total
+				 FROM fee_payments fp
+				 LEFT JOIN students s ON fp.student_reg_number = s.RegNumber
+				 WHERE ${whereClause}`,
+				queryParams
+			);
+
+			const totalPayments = countResult[0].total;
+			const totalPages = Math.ceil(totalPayments / limitNum);
+
+			// Get payments with pagination
+			const finalParams = [...queryParams, limitNum, offset];
+			const [payments] = await conn.query(
+				`SELECT 
+				   fp.id,
+				   fp.student_reg_number,
+				   fp.payment_amount,
+				   fp.payment_currency,
+				   fp.exchange_rate,
+				   fp.base_currency_amount,
+				   fp.payment_method,
+				   fp.payment_date,
+				   fp.receipt_number,
+				   fp.reference_number,
+				   fp.notes,
+				   fp.created_at,
+				   s.Name as student_name,
+				   s.Surname as student_surname,
+				   c.name as currency_name,
+				   c.symbol as currency_symbol
+				 FROM fee_payments fp
+				 LEFT JOIN students s ON fp.student_reg_number = s.RegNumber
+				 LEFT JOIN currencies c ON fp.payment_currency = c.id
+				 WHERE ${whereClause}
+				 ORDER BY fp.created_at DESC, fp.id DESC
+				 LIMIT ? OFFSET ?`,
+				finalParams
+			);
+
+			conn.release();
+
+			res.json({
+				success: true,
+				data: payments,
+				pagination: {
+					current_page: pageNum,
+					total_pages: totalPages,
+					total_items: totalPayments,
+					items_per_page: limitNum,
+					has_next: pageNum < totalPages,
+					has_prev: pageNum > 1
+				}
+			});
+		} catch (error) {
+			conn.release();
+			console.error('Error fetching all payments:', error);
+			res.status(500).json({
+				success: false,
+				message: 'Failed to fetch payments',
 				error: error.message
 			});
 		}
@@ -358,7 +471,7 @@ class FeePaymentController {
 				reason,
 				created_by: req.user.id
 			};
-			
+
 			await FeePaymentController.createRefundJournalEntries(conn, refundJournalData);
 
 			// Log audit event
@@ -403,10 +516,10 @@ class FeePaymentController {
 		const [result] = await conn.execute(
 			'SELECT COUNT(*) as count FROM fee_payments WHERE DATE(created_at) = CURDATE()'
 		);
-		
+
 		const count = result[0].count + 1;
 		const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-		
+
 		return `FP${date}-${count.toString().padStart(4, '0')}`;
 	}
 
@@ -457,10 +570,10 @@ class FeePaymentController {
 			const student_name = `${students[0].Name} ${students[0].Surname}`;
 
 			// Get Cash account (usually account 83 - Cash on Hand)
-		const [cashAccounts] = await conn.execute(
-			'SELECT id FROM chart_of_accounts WHERE code = ? AND type = ? LIMIT 1',
-			['1000', 'Asset']
-		);
+			const [cashAccounts] = await conn.execute(
+				'SELECT id FROM chart_of_accounts WHERE code = ? AND type = ? LIMIT 1',
+				['1000', 'Asset']
+			);
 
 			if (cashAccounts.length === 0) {
 				throw new Error('Cash account not found in chart of accounts');
@@ -468,11 +581,11 @@ class FeePaymentController {
 
 			const cashAccountId = cashAccounts[0].id;
 
-		// Get Tuition Fees Revenue account
-		const [revenueAccounts] = await conn.execute(
-			'SELECT id FROM chart_of_accounts WHERE code LIKE ? AND type = ? AND name LIKE ? LIMIT 1',
-			['4%', 'Revenue', '%tuition%']
-		);
+			// Get Tuition Fees Revenue account
+			const [revenueAccounts] = await conn.execute(
+				'SELECT id FROM chart_of_accounts WHERE code LIKE ? AND type = ? AND name LIKE ? LIMIT 1',
+				['4%', 'Revenue', '%tuition%']
+			);
 
 			if (revenueAccounts.length === 0) {
 				// Fallback to any revenue account
@@ -480,41 +593,41 @@ class FeePaymentController {
 					'SELECT id FROM chart_of_accounts WHERE type = ? LIMIT 1',
 					['Revenue']
 				);
-				
+
 				if (fallbackRevenue.length === 0) {
 					throw new Error('Revenue account not found in chart of accounts');
 				}
-				
+
 				revenueAccounts[0] = fallbackRevenue[0];
 			}
 
-		const revenueAccountId = revenueAccounts[0].id;
+			const revenueAccountId = revenueAccounts[0].id;
 
-		// Get or create journal for fee payments
-		let journalId = 6; // Try Fees Journal (ID: 6) first
-		const [journalCheck] = await conn.execute('SELECT id FROM journals WHERE id = ?', [journalId]);
-		if (journalCheck.length === 0) {
-			// Try to find any existing journal
-			const [anyJournal] = await conn.execute('SELECT id FROM journals LIMIT 1');
-			if (anyJournal.length > 0) {
-				journalId = anyJournal[0].id;
-			} else {
-				// Create Fees Journal if no journals exist
-				const [journalResult] = await conn.execute(
-					'INSERT INTO journals (name, description, is_active) VALUES (?, ?, ?)',
-					['Fees Journal', 'Journal for fee payment transactions', 1]
-				);
-				journalId = journalResult.insertId;
+			// Get or create journal for fee payments
+			let journalId = 6; // Try Fees Journal (ID: 6) first
+			const [journalCheck] = await conn.execute('SELECT id FROM journals WHERE id = ?', [journalId]);
+			if (journalCheck.length === 0) {
+				// Try to find any existing journal
+				const [anyJournal] = await conn.execute('SELECT id FROM journals LIMIT 1');
+				if (anyJournal.length > 0) {
+					journalId = anyJournal[0].id;
+				} else {
+					// Create Fees Journal if no journals exist
+					const [journalResult] = await conn.execute(
+						'INSERT INTO journals (name, description, is_active) VALUES (?, ?, ?)',
+						['Fees Journal', 'Journal for fee payment transactions', 1]
+					);
+					journalId = journalResult.insertId;
+				}
 			}
-		}
 
-		// Create journal entry header
-		const [journalResult] = await conn.execute(
-			`INSERT INTO journal_entries 
+			// Create journal entry header
+			const [journalResult] = await conn.execute(
+				`INSERT INTO journal_entries 
 			 (journal_id, entry_date, reference, description) 
 			 VALUES (?, ?, ?, ?)`,
-			[journalId, paymentData.payment_date, paymentData.receipt_number, `Tuition Fee Payment - ${student_name} (${paymentData.student_reg_number})`]
-		);
+				[journalId, paymentData.payment_date, paymentData.receipt_number, `Tuition Fee Payment - ${student_name} (${paymentData.student_reg_number})`]
+			);
 
 			const journalEntryId = journalResult.insertId;
 
@@ -588,10 +701,10 @@ class FeePaymentController {
 			const student_name = `${students[0].Name} ${students[0].Surname}`;
 
 			// Get Cash account (usually account 83 - Cash on Hand)
-		const [cashAccounts] = await conn.execute(
-			'SELECT id FROM chart_of_accounts WHERE code = ? AND type = ? LIMIT 1',
-			['1000', 'Asset']
-		);
+			const [cashAccounts] = await conn.execute(
+				'SELECT id FROM chart_of_accounts WHERE code = ? AND type = ? LIMIT 1',
+				['1000', 'Asset']
+			);
 
 			if (cashAccounts.length === 0) {
 				throw new Error('Cash account not found in chart of accounts');
@@ -599,11 +712,11 @@ class FeePaymentController {
 
 			const cashAccountId = cashAccounts[0].id;
 
-		// Get Tuition Fees Revenue account
-		const [revenueAccounts] = await conn.execute(
-			'SELECT id FROM chart_of_accounts WHERE code LIKE ? AND type = ? AND name LIKE ? LIMIT 1',
-			['4%', 'Revenue', '%tuition%']
-		);
+			// Get Tuition Fees Revenue account
+			const [revenueAccounts] = await conn.execute(
+				'SELECT id FROM chart_of_accounts WHERE code LIKE ? AND type = ? AND name LIKE ? LIMIT 1',
+				['4%', 'Revenue', '%tuition%']
+			);
 
 			if (revenueAccounts.length === 0) {
 				// Fallback to any revenue account
@@ -611,41 +724,41 @@ class FeePaymentController {
 					'SELECT id FROM chart_of_accounts WHERE type = ? LIMIT 1',
 					['Revenue']
 				);
-				
+
 				if (fallbackRevenue.length === 0) {
 					throw new Error('Revenue account not found in chart of accounts');
 				}
-				
+
 				revenueAccounts[0] = fallbackRevenue[0];
 			}
 
-		const revenueAccountId = revenueAccounts[0].id;
+			const revenueAccountId = revenueAccounts[0].id;
 
-		// Get or create journal for fee payments
-		let journalId = 6; // Try Fees Journal (ID: 6) first
-		const [journalCheck] = await conn.execute('SELECT id FROM journals WHERE id = ?', [journalId]);
-		if (journalCheck.length === 0) {
-			// Try to find any existing journal
-			const [anyJournal] = await conn.execute('SELECT id FROM journals LIMIT 1');
-			if (anyJournal.length > 0) {
-				journalId = anyJournal[0].id;
-			} else {
-				// Create Fees Journal if no journals exist
-				const [journalResult] = await conn.execute(
-					'INSERT INTO journals (name, description, is_active) VALUES (?, ?, ?)',
-					['Fees Journal', 'Journal for fee payment transactions', 1]
-				);
-				journalId = journalResult.insertId;
+			// Get or create journal for fee payments
+			let journalId = 6; // Try Fees Journal (ID: 6) first
+			const [journalCheck] = await conn.execute('SELECT id FROM journals WHERE id = ?', [journalId]);
+			if (journalCheck.length === 0) {
+				// Try to find any existing journal
+				const [anyJournal] = await conn.execute('SELECT id FROM journals LIMIT 1');
+				if (anyJournal.length > 0) {
+					journalId = anyJournal[0].id;
+				} else {
+					// Create Fees Journal if no journals exist
+					const [journalResult] = await conn.execute(
+						'INSERT INTO journals (name, description, is_active) VALUES (?, ?, ?)',
+						['Fees Journal', 'Journal for fee payment transactions', 1]
+					);
+					journalId = journalResult.insertId;
+				}
 			}
-		}
 
-		// Create journal entry header
-		const [journalResult] = await conn.execute(
-			`INSERT INTO journal_entries 
+			// Create journal entry header
+			const [journalResult] = await conn.execute(
+				`INSERT INTO journal_entries 
 			 (journal_id, entry_date, reference, description) 
 			 VALUES (?, ?, ?, ?)`,
-			[journalId, new Date(), `REFUND-${refundData.receipt_number}`, `Tuition Fee Refund - ${student_name} (${refundData.student_reg_number}) - ${refundData.reason || 'Refund'}`]
-		);
+				[journalId, new Date(), `REFUND-${refundData.receipt_number}`, `Tuition Fee Refund - ${student_name} (${refundData.student_reg_number}) - ${refundData.reason || 'Refund'}`]
+			);
 
 			const journalEntryId = journalResult.insertId;
 

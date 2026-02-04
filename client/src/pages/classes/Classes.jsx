@@ -111,9 +111,16 @@ const Classes = () => {
   const [streamSuccess, setStreamSuccess] = useState('');
   const [editingStreamId, setEditingStreamId] = useState(null);
   const [editStreamForm, setEditStreamForm] = useState({ name: '', stage: '' });
+  const [streamToDelete, setStreamToDelete] = useState(null);
+  const [isDeletingStream, setIsDeletingStream] = useState(false);
+  const [clearStreamsLoading, setClearStreamsLoading] = useState(false);
   const [subjects, setSubjects] = useState([]);
   const [subjectForm, setSubjectForm] = useState({ code: '', name: '', syllabus: '' });
   const [subjectLoading, setSubjectLoading] = useState(false);
+  const [editingSubjectId, setEditingSubjectId] = useState(null);
+  const [editSubjectForm, setEditSubjectForm] = useState({ code: '', name: '', syllabus: '' });
+  const [subjectToDelete, setSubjectToDelete] = useState(null);
+  const [isDeletingSubject, setIsDeletingSubject] = useState(false);
 
   // Close to Term states
   const [closeTermLoading, setCloseTermLoading] = useState(false);
@@ -793,16 +800,78 @@ const Classes = () => {
     }
   };
 
+  const handleConfirmDeleteSubject = async () => {
+    if (!subjectToDelete) return;
+    try {
+      setIsDeletingSubject(true);
+      await axios.delete(`${BASE_URL}/classes/subjects/${subjectToDelete.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showToast('Subject deleted successfully!', 'success');
+      setSubjectToDelete(null);
+      fetchSubjects();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to delete subject', 'error');
+    } finally {
+      setIsDeletingSubject(false);
+    }
+  };
+
+  const handleConfirmDeleteStream = async () => {
+    if (!streamToDelete) return;
+    try {
+      setIsDeletingStream(true);
+      await axios.delete(`${BASE_URL}/classes/streams/${streamToDelete.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      showToast('Stream deleted successfully!', 'success');
+      setStreamToDelete(null);
+      fetchStreams();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to delete stream', 'error');
+    } finally {
+      setIsDeletingStream(false);
+    }
+  };
+
+  const handleClearUnusedStreams = async () => {
+    if (!window.confirm('Remove all streams that are not used by any class or student? Streams in use will be kept.')) return;
+    try {
+      setClearStreamsLoading(true);
+      const response = await axios.delete(`${BASE_URL}/classes/streams/clear-unused`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.success) {
+        showToast(response.data.message || 'Streams cleared.', 'success');
+        fetchStreams();
+      } else {
+        showToast(response.data.message || 'Failed to clear streams.', 'error');
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to clear streams.', 'error');
+    } finally {
+      setClearStreamsLoading(false);
+    }
+  };
+
   const handleAddSubject = async (e) => {
     e.preventDefault();
-    if (!subjectForm.code.trim() || !subjectForm.name.trim()) {
-      setStreamError('Both code and name are required.');
+    const code = subjectForm.code.trim();
+    const name = subjectForm.name.trim();
+    if (!code || !name) {
+      showToast('Both code and name are required.', 'error');
       return;
     }
     try {
       setSubjectLoading(true);
-      const response = await axios.post(`${BASE_URL}/classes/subjects`, subjectForm, {
-        headers: { Authorization: `Bearer ${token}` }
+      const syllabusValue = (subjectForm.syllabus && String(subjectForm.syllabus).trim()) || null;
+      const payload = {
+        code: String(code),
+        name: String(name),
+        syllabus: syllabusValue
+      };
+      const response = await axios.post(`${BASE_URL}/classes/subjects`, payload, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
       });
       if (response.data.success) {
         showToast('Subject added successfully!', 'success');
@@ -812,7 +881,12 @@ const Classes = () => {
         showToast(response.data.message || 'Failed to add subject.', 'error');
       }
     } catch (err) {
-      showToast(err.response?.data?.message || 'Failed to add subject.', 'error');
+      const data = err.response?.data;
+      const msg = (data && (data.message || data.error)) || err.message || 'Failed to add subject.';
+      showToast(msg, 'error');
+      if (err.response?.status === 400 && data) {
+        console.warn('Add subject 400:', data);
+      }
     } finally {
       setSubjectLoading(false);
     }
@@ -876,14 +950,6 @@ const Classes = () => {
     { id: 'configurations', name: 'Class Configurations', icon: faCog },
     { id: 'close-term', name: 'Close to Term', icon: faLock }
   ];
-
-  if (loading && gradelevelClasses.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading classes...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="reports-container" style={{ 
@@ -1029,8 +1095,18 @@ const Classes = () => {
         height: '100%'
       }}>
         {loading && gradelevelClasses.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading classes...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading classes...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
@@ -1330,12 +1406,33 @@ const Classes = () => {
 
             {/* Existing Streams */}
             <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>
-                Existing Streams
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                  Existing Streams
+                </h3>
+                {streams.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearUnusedStreams}
+                    disabled={clearStreamsLoading}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      color: '#b91c1c',
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '6px',
+                      cursor: clearStreamsLoading ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {clearStreamsLoading ? 'Clearing...' : 'Clear unused streams'}
+                  </button>
+                )}
+              </div>
               {streams.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.75rem' }}>
-                  No streams found.
+                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
+                  No streams yet. By default streams are empty (like subjects). Add streams using the form above to get started.
                 </div>
               ) : (
                 <div style={{ border: '1px solid var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
@@ -1420,16 +1517,7 @@ const Classes = () => {
                                     <FontAwesomeIcon icon={faEdit} />
                                   </button>
                                   <button
-                                    onClick={() => {
-                                      if (window.confirm('Are you sure you want to delete this stream?')) {
-                                        axios.delete(`${BASE_URL}/classes/streams/${stream.id}`, {
-                                          headers: { Authorization: `Bearer ${token}` }
-                                        }).then(() => {
-                                          fetchStreams();
-                                          showToast('Stream deleted successfully!', 'success');
-                                        }).catch(() => showToast('Failed to delete stream', 'error'));
-                                      }
-                                    }}
+                                    onClick={() => setStreamToDelete(stream)}
                                     style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                                     title="Delete"
                                   >
@@ -1453,8 +1541,8 @@ const Classes = () => {
                 Existing Subjects
               </h3>
               {subjects.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.75rem' }}>
-                  No subjects found.
+                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
+                  No subjects yet. By default subjects are empty (like streams). Add subjects using the form above to get started.
                 </div>
               ) : (
                 <div style={{ border: '1px solid var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
@@ -1464,6 +1552,7 @@ const Classes = () => {
                         <th style={{ padding: '6px 10px' }}>SUBJECT NAME</th>
                         <th style={{ padding: '6px 10px' }}>CODE</th>
                         <th style={{ padding: '6px 10px' }}>SYLLABUS</th>
+                        <th style={{ padding: '6px 10px' }}>ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1475,9 +1564,91 @@ const Classes = () => {
                             backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
                           }}
                         >
-                          <td style={{ padding: '4px 10px' }}>{subject.name}</td>
-                          <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{subject.code}</td>
-                          <td style={{ padding: '4px 10px' }}>{subject.syllabus || '-'}</td>
+                          {editingSubjectId === subject.id ? (
+                            <>
+                              <td style={{ padding: '4px 10px' }}>
+                                <input
+                                  type="text"
+                                  value={editSubjectForm.name}
+                                  onChange={(e) => setEditSubjectForm(prev => ({ ...prev, name: e.target.value }))}
+                                  className="form-control"
+                                  style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem' }}
+                                />
+                              </td>
+                              <td style={{ padding: '4px 10px' }}>
+                                <input
+                                  type="text"
+                                  value={editSubjectForm.code}
+                                  onChange={(e) => setEditSubjectForm(prev => ({ ...prev, code: e.target.value }))}
+                                  className="form-control"
+                                  style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem', fontFamily: 'monospace' }}
+                                />
+                              </td>
+                              <td style={{ padding: '4px 10px' }}>
+                                <input
+                                  type="text"
+                                  value={editSubjectForm.syllabus || ''}
+                                  onChange={(e) => setEditSubjectForm(prev => ({ ...prev, syllabus: e.target.value }))}
+                                  className="form-control"
+                                  style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem' }}
+                                  placeholder="Optional"
+                                />
+                              </td>
+                              <td style={{ padding: '4px 10px' }}>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => {
+                                      axios.put(`${BASE_URL}/classes/subjects/${subject.id}`, editSubjectForm, {
+                                        headers: { Authorization: `Bearer ${token}` }
+                                      }).then(() => {
+                                        setEditingSubjectId(null);
+                                        fetchSubjects();
+                                        showToast('Subject updated successfully!', 'success');
+                                      }).catch(() => showToast('Failed to update subject', 'error'));
+                                    }}
+                                    className="modal-btn modal-btn-confirm"
+                                    style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                                  >
+                                    <FontAwesomeIcon icon={faSave} />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingSubjectId(null)}
+                                    className="modal-btn modal-btn-cancel"
+                                    style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                                  >
+                                    <FontAwesomeIcon icon={faTimes} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={{ padding: '4px 10px' }}>{subject.name}</td>
+                              <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{subject.code}</td>
+                              <td style={{ padding: '4px 10px' }}>{subject.syllabus || '-'}</td>
+                              <td style={{ padding: '4px 10px' }}>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingSubjectId(subject.id);
+                                      setEditSubjectForm({ code: subject.code, name: subject.name, syllabus: subject.syllabus || '' });
+                                    }}
+                                    style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                    title="Edit"
+                                  >
+                                    <FontAwesomeIcon icon={faEdit} />
+                                  </button>
+                                  <button
+                                    onClick={() => setSubjectToDelete(subject)}
+                                    style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                                    title="Delete"
+                                  >
+                                    <FontAwesomeIcon icon={faTrash} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -2389,6 +2560,167 @@ const Classes = () => {
                 disabled={isDeleting}
               >
                 {isDeleting ? 'Deleting...' : 'Delete Class'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Stream Modal */}
+      {streamToDelete && (
+        <div className="modal-overlay" onClick={() => !isDeletingStream && setStreamToDelete(null)}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '420px' }}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">Delete Stream</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => !isDeletingStream && setStreamToDelete(null)}
+                disabled={isDeletingStream}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <FontAwesomeIcon icon={faTrash} style={{ color: '#dc2626', fontSize: '1rem' }} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    Are you sure you want to delete this stream?
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    This action cannot be undone. The stream must not be used by any class.
+                  </p>
+                </div>
+              </div>
+              <div style={{
+                padding: '12px',
+                background: '#f9fafb',
+                borderRadius: '4px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Stream
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  <strong>{streamToDelete.name}</strong> ({streamToDelete.stage})
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="modal-btn modal-btn-cancel"
+                onClick={() => setStreamToDelete(null)}
+                disabled={isDeletingStream}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="modal-btn modal-btn-delete"
+                onClick={handleConfirmDeleteStream}
+                disabled={isDeletingStream}
+              >
+                {isDeletingStream ? 'Deleting...' : 'Delete Stream'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Subject Modal */}
+      {subjectToDelete && (
+        <div className="modal-overlay" onClick={() => !isDeletingSubject && setSubjectToDelete(null)}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '420px' }}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">Delete Subject</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => !isDeletingSubject && setSubjectToDelete(null)}
+                disabled={isDeletingSubject}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  background: '#fef2f2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <FontAwesomeIcon icon={faTrash} style={{ color: '#dc2626', fontSize: '1rem' }} />
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    Are you sure you want to delete this subject?
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    This action cannot be undone. The subject must not be used by any subject class.
+                  </p>
+                </div>
+              </div>
+              <div style={{
+                padding: '12px',
+                background: '#f9fafb',
+                borderRadius: '4px',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Subject
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                  <strong>{subjectToDelete.name}</strong> ({subjectToDelete.code})
+                </div>
+                {subjectToDelete.syllabus && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    Syllabus: {subjectToDelete.syllabus}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="modal-btn modal-btn-cancel"
+                onClick={() => setSubjectToDelete(null)}
+                disabled={isDeletingSubject}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="modal-btn modal-btn-delete"
+                onClick={handleConfirmDeleteSubject}
+                disabled={isDeletingSubject}
+              >
+                {isDeletingSubject ? 'Deleting...' : 'Delete Subject'}
               </button>
             </div>
           </div>

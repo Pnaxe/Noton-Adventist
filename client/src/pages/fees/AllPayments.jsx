@@ -307,7 +307,7 @@ Thank you for your payment!
         <head>
           <title>Boarding Fees Payment Receipt</title>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
+            body { font-family: 'Nunito', sans-serif; margin: 20px; }
             .receipt { border: 2px solid #000; padding: 20px; max-width: 400px; }
             .header { text-align: center; border-bottom: 1px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
             .row { display: flex; justify-content: space-between; margin: 5px 0; }

@@ -17,26 +17,26 @@ const StudentBilling = () => {
     const openingBalanceRef = useRef(null);
 
     const renderContent = () => {
-        switch (activeTab) {
-            case 'record-payment':
+            switch (activeTab) {
+                case 'record-payment':
                 return <TuitionFeesPayment ref={tuitionPaymentRef} />;
-            case 'boarding-fees':
-                return <BoardingFeesPayment onPaymentSuccess={() => { }} />;
-            case 'outstanding-balance':
-                return <StudentBalances />;
-            case 'opening-balance':
+                case 'boarding-fees':
+                    return <BoardingFeesPayment onPaymentSuccess={() => { }} />;
+                case 'outstanding-balance':
+                    return <StudentBalances />;
+                case 'opening-balance':
                 return <ManualBalanceUpdate ref={openingBalanceRef} />;
-            case 'additional-fees':
-                return <AdditionalFees />;
-            case 'waivers':
-                return <Waivers />;
-            case 'invoice-structures':
-                return <InvoiceStructures />;
-            case 'financial-record':
-                return <StudentFinancialRecord />;
-            default:
-                return <TuitionFeesPayment />;
-        }
+                case 'additional-fees':
+                    return <AdditionalFees />;
+                case 'waivers':
+                    return <Waivers />;
+                case 'invoice-structures':
+                    return <InvoiceStructures />;
+                case 'financial-record':
+                    return <StudentFinancialRecord />;
+                default:
+                    return <TuitionFeesPayment />;
+            }
     };
 
     return (
@@ -48,30 +48,34 @@ const StudentBilling = () => {
             flexDirection: 'column',
             position: 'relative'
         }}>
-            {/* Record Payment Button - Only show for record-payment tab */}
+            {/* Record Payment Header - Only show for record-payment tab */}
             {activeTab === 'record-payment' && (
-                <div className="report-header" style={{ flexShrink: 0 }}>
-                    <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
-                        <button
-                            onClick={() => {
-                                if (tuitionPaymentRef.current) {
-                                    tuitionPaymentRef.current.openModal();
-                                }
-                            }}
-                            className="btn-checklist"
-                        >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            Record Payment
-                        </button>
-                    </div>
+            <div className="report-header" style={{ flexShrink: 0 }}>
+                <div className="report-header-content">
+                    <h2 className="report-title">Record Payment</h2>
+                    <p className="report-subtitle">Record and manage student fee payments.</p>
                 </div>
+                <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <button
+                        onClick={() => {
+                            if (tuitionPaymentRef.current) {
+                                tuitionPaymentRef.current.openModal();
+                            }
+                        }}
+                        className="btn-checklist"
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Record Payment
+                        </button>
+                </div>
+            </div>
             )}
 
             {/* Render Content - Each component handles its own layout */}
-            {renderContent()}
+                {renderContent()}
         </div>
     );
 };

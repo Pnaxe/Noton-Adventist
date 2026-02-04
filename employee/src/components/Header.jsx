@@ -72,51 +72,55 @@ const Header = ({ onMenuClick }) => {
   return (
     <nav className="top-nav-bar">
       <div className="top-nav-content">
-        {/* Left - Menu Button (Mobile) & Logo */}
-        <div className="top-nav-left flex items-center gap-4">
+        {/* Left - Menu Button (Mobile) & Logo - always visible on small screens */}
+        <div className="top-nav-left flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink-0">
           <button
             type="button"
-            className="lg:hidden -m-2.5 p-2.5 text-gray-700"
+            className="top-nav-menu-btn lg:hidden flex items-center justify-center text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
             onClick={onMenuClick}
+            aria-label="Open menu"
           >
-            <span className="sr-only">Open sidebar</span>
-            <FontAwesomeIcon icon={faBars} className="h-6 w-6" aria-hidden="true" />
+            <FontAwesomeIcon icon={faBars} className="h-5 w-5 sm:h-6 sm:w-6" aria-hidden="true" />
           </button>
-          <img src={logo} alt="Logo" className="top-nav-logo" />
+          <img src={logo} alt="Logo" className="top-nav-logo flex-shrink-0" />
           <span className="hidden md:inline" style={{
             fontSize: '1rem',
             fontWeight: 'bold',
             color: 'var(--text-primary)',
             marginLeft: '4px',
             whiteSpace: 'nowrap'
-          }}>Brooklyn Private School</span>
+          }}>Norton Adventist Secondary School</span>
         </div>
 
         {/* Center - Empty */}
-        <div className="top-nav-center">
+        <div className="top-nav-center hidden sm:block">
         </div>
 
         {/* Right - User Info */}
-        <div className="top-nav-right">
+        <div className="top-nav-right flex-shrink-0">
           {/* Notifications */}
           <button
             type="button"
-            className="-m-2.5 p-2.5 text-gray-400 hover:text-gray-500 transition-colors"
+            className="top-nav-icon-btn -m-2.5 p-2.5 text-gray-400 hover:text-gray-500 transition-colors"
             onClick={() => navigate('/notifications')}
           >
             <span className="sr-only">View notifications</span>
             <FontAwesomeIcon icon={faBell} className="h-5 w-5" aria-hidden="true" />
           </button>
 
-          {/* User Info with Dropdown */}
+          {/* User Info with Dropdown - hide text on very small screens so menu has room */}
           <div className="top-nav-user-info" ref={dropdownRef}>
-            <div className="top-nav-user-details">
+            <div className="top-nav-user-details hidden sm:block">
               <p className="top-nav-username">{getEmployeeName()}</p>
               <p className="top-nav-user-role">{getEmployeeID()}</p>
             </div>
             <div
               className="top-nav-avatar"
               onClick={() => setShowDropdown(!showDropdown)}
+              role="button"
+              aria-label="Account menu"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowDropdown(!showDropdown); }}
             >
               {getInitials()}
             </div>

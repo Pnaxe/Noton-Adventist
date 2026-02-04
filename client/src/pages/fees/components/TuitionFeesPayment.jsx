@@ -11,7 +11,6 @@ import {
   faTimes,
   faPlus,
   faEye,
-  faBed,
   faFileInvoiceDollar
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -24,7 +23,7 @@ import { jsPDF } from 'jspdf';
 const TuitionFeesPayment = forwardRef((props, ref) => {
   const { token } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [tableLoading, setTableLoading] = useState(false);
+  const [tableLoading, setTableLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
@@ -34,14 +33,17 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
   const [totalPayments, setTotalPayments] = useState(0);
   const [limit] = useState(25);
 
+  // Filter states
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState('');
+  const [currencyFilter, setCurrencyFilter] = useState('');
+
   // Modal states
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentType, setPaymentType] = useState('tuition'); // 'tuition', 'boarding', 'additional'
+  const [paymentType, setPaymentType] = useState('tuition'); // 'tuition', 'additional'
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [currencies, setCurrencies] = useState([]);
-  const [hostels, setHostels] = useState([]);
   const [paymentMethods] = useState([
     { id: 'cash', name: 'Cash' },
     { id: 'bank_transfer', name: 'Bank Transfer' },
@@ -55,6 +57,11 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
   const [showReceipt, setShowReceipt] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  // View modal states
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
+  const [viewModalLoading, setViewModalLoading] = useState(false);
 
   // Form states - Tuition
   const [tuitionFormData, setTuitionFormData] = useState({
@@ -71,19 +78,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     notes: ''
   });
 
-  // Form states - Boarding
-  const [boardingFormData, setBoardingFormData] = useState({
-    student_reg_number: '',
-    academic_year: new Date().getFullYear().toString(),
-    term: '1',
-    hostel_id: '',
-    amount_paid: '',
-    currency_id: '',
-    payment_method: 'Cash',
-    payment_date: new Date().toISOString().split('T')[0],
-    reference_number: '',
-    notes: ''
-  });
 
   // Form states - Additional Fees
   const [additionalFormData, setAdditionalFormData] = useState({
@@ -114,17 +108,19 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
 
   useEffect(() => {
     fetchPayments();
-  }, [currentPage, activeSearchTerm]);
+  }, [currentPage, activeSearchTerm, paymentMethodFilter, currencyFilter]);
 
   useEffect(() => {
     if (showPaymentModal) {
       fetchClasses();
       fetchCurrencies();
-      if (paymentType === 'boarding') {
-        fetchHostels();
-      }
     }
   }, [showPaymentModal, paymentType]);
+
+  // Fetch currencies on mount for filter
+  useEffect(() => {
+    fetchCurrencies();
+  }, []);
 
   useEffect(() => {
     if (tuitionFormData.gradelevel_class_id && tuitionFormData.term && tuitionFormData.academic_year) {
@@ -144,18 +140,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       amount: '',
       currency_id: '',
       payment_method_id: '',
-      payment_date: new Date().toISOString().split('T')[0],
-      reference_number: '',
-      notes: ''
-    });
-    setBoardingFormData({
-      student_reg_number: '',
-      academic_year: new Date().getFullYear().toString(),
-      term: '1',
-      hostel_id: '',
-      amount_paid: '',
-      currency_id: '',
-      payment_method: 'Cash',
       payment_date: new Date().toISOString().split('T')[0],
       reference_number: '',
       notes: ''
@@ -186,7 +170,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       setTableLoading(true);
       setError(null);
 
-      // Fetch boarding payments (as they have student info)
+      // Fetch fee payments
       const params = {
         page: currentPage,
         limit: limit
@@ -196,7 +180,15 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         params.search = activeSearchTerm.trim();
       }
 
-      const response = await axios.get(`${BASE_URL}/boarding/payments`, {
+      if (paymentMethodFilter) {
+        params.payment_method = paymentMethodFilter;
+      }
+
+      if (currencyFilter) {
+        params.currency_id = currencyFilter;
+      }
+
+      const response = await axios.get(`${BASE_URL}/fees/payments`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       });
@@ -209,8 +201,8 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
           student_name: payment.student_name || 'N/A',
           student_surname: payment.student_surname || 'N/A',
           student_reg_number: payment.student_reg_number || 'N/A',
-          amount: payment.amount_paid || payment.base_currency_amount || 0,
-          currency: payment.base_currency_symbol || payment.currency_symbol || '',
+          amount: payment.base_currency_amount || payment.payment_amount || 0,
+          currency: payment.currency_symbol || payment.currency_name || '',
           payment_date: payment.payment_date || payment.created_at,
           payment_method: payment.payment_method || 'N/A',
           receipt_number: payment.receipt_number || 'N/A',
@@ -258,16 +250,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     }
   };
 
-  const fetchHostels = async () => {
-    try {
-      const response = await axios.get(`${BASE_URL}/boarding/hostels`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setHostels(response.data.data || []);
-    } catch (error) {
-      console.error('Error fetching hostels:', error);
-    }
-  };
 
   const fetchInvoiceStructures = async () => {
     try {
@@ -307,10 +289,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       ...prev,
       student_reg_number: student.RegNumber
     }));
-    setBoardingFormData(prev => ({
-      ...prev,
-      student_reg_number: student.RegNumber
-    }));
     setAdditionalFormData(prev => ({
       ...prev,
       student_reg_number: student.RegNumber
@@ -346,18 +324,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       amount: '',
       currency_id: '',
       payment_method_id: '',
-      payment_date: new Date().toISOString().split('T')[0],
-      reference_number: '',
-      notes: ''
-    });
-    setBoardingFormData({
-      student_reg_number: '',
-      academic_year: new Date().getFullYear().toString(),
-      term: '1',
-      hostel_id: '',
-      amount_paid: '',
-      currency_id: '',
-      payment_method: 'Cash',
       payment_date: new Date().toISOString().split('T')[0],
       reference_number: '',
       notes: ''
@@ -405,27 +371,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         setShowErrorModal(true);
         return;
       }
-    } else if (paymentType === 'boarding') {
-      if (!boardingFormData.amount_paid || parseFloat(boardingFormData.amount_paid) <= 0) {
-        setErrorMessage('Please enter a valid payment amount');
-        setShowErrorModal(true);
-        return;
-      }
-      if (!boardingFormData.currency_id) {
-        setErrorMessage('Please select a currency');
-        setShowErrorModal(true);
-        return;
-      }
-      if (!boardingFormData.hostel_id) {
-        setErrorMessage('Please select a hostel');
-        setShowErrorModal(true);
-        return;
-      }
-      if (!boardingFormData.reference_number) {
-        setErrorMessage('Please enter a reference number');
-        setShowErrorModal(true);
-        return;
-      }
     } else if (paymentType === 'additional') {
       if (!additionalFormData.payment_amount || parseFloat(additionalFormData.payment_amount) <= 0) {
         setErrorMessage('Please enter a valid payment amount');
@@ -461,7 +406,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       if (paymentType === 'tuition') {
         const paymentPayload = {
           student_reg_number: tuitionFormData.student_reg_number,
-          amount: parseFloat(tuitionFormData.amount),
+          payment_amount: parseFloat(tuitionFormData.amount),
           payment_currency: tuitionFormData.currency_id,
           payment_method: paymentMethods.find(m => m.id === tuitionFormData.payment_method_id)?.name || 'Cash',
           payment_date: tuitionFormData.payment_date,
@@ -492,39 +437,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
             term: selectedStructure?.term || 'N/A',
             academic_year: selectedStructure?.academic_year || 'N/A',
             notes: tuitionFormData.notes || ''
-          };
-        }
-      } else if (paymentType === 'boarding') {
-        const paymentPayload = {
-          student_reg_number: boardingFormData.student_reg_number,
-          academic_year: boardingFormData.academic_year,
-          term: boardingFormData.term,
-          hostel_id: boardingFormData.hostel_id,
-          amount_paid: parseFloat(boardingFormData.amount_paid),
-          currency_id: boardingFormData.currency_id,
-          payment_method: boardingFormData.payment_method,
-          payment_date: boardingFormData.payment_date,
-          reference_number: boardingFormData.reference_number,
-          notes: boardingFormData.notes || ''
-        };
-
-        response = await axios.post(`${BASE_URL}/boarding/payments`, paymentPayload, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        if (response.data.success) {
-          receiptData = {
-            receipt_number: response.data.data.receipt_number,
-            student_name: `${selectedStudent.Name} ${selectedStudent.Surname}`,
-            student_reg: selectedStudent.RegNumber,
-            amount: boardingFormData.amount_paid,
-            currency: currencies.find(c => c.id === boardingFormData.currency_id)?.symbol || '',
-            payment_date: boardingFormData.payment_date,
-            payment_method: boardingFormData.payment_method,
-            fee_type: 'boarding',
-            reference_number: boardingFormData.reference_number,
-            hostel_name: hostels.find(h => h.id === boardingFormData.hostel_id)?.name || 'N/A',
-            notes: boardingFormData.notes || ''
           };
         }
       } else if (paymentType === 'additional') {
@@ -562,6 +474,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       if (response && response.data.success) {
         setReceipt(receiptData);
         setShowConfirmation(false);
+        setShowPaymentModal(false);
         setShowReceipt(true);
         setSuccessMessage('Payment processed successfully');
         setShowSuccessModal(true);
@@ -581,6 +494,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       }
       setShowErrorModal(true);
       setShowConfirmation(false);
+      setShowPaymentModal(false);
     } finally {
       setIsProcessing(false);
     }
@@ -640,17 +554,43 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     setCurrentPage(1);
   };
 
+  const handleClearFilters = () => {
+    setPaymentMethodFilter('');
+    setCurrencyFilter('');
+    setSearchTerm('');
+    setActiveSearchTerm('');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = paymentMethodFilter || currencyFilter;
+
+  const handleViewPayment = async (payment) => {
+    try {
+      setViewModalLoading(true);
+      const response = await axios.get(`${BASE_URL}/fees/payments/${payment.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data && response.data.success && response.data.data) {
+        setSelectedPayment(response.data.data);
+        setShowViewModal(true);
+      } else {
+        setErrorMessage('Invalid response from server');
+        setShowErrorModal(true);
+      }
+    } catch (error) {
+      console.error('Error fetching payment details:', error);
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message || 'Failed to fetch payment details';
+      setErrorMessage(errorMsg);
+      setShowErrorModal(true);
+    } finally {
+      setViewModalLoading(false);
+    }
+  };
+
   // Calculate display ranges for pagination
   const displayStart = payments.length > 0 ? (currentPage - 1) * limit + 1 : 0;
   const displayEnd = Math.min(currentPage * limit, totalPayments);
-
-  if (loading && payments.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading payment history...</div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -694,6 +634,71 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
               )}
             </div>
           </form>
+
+          {/* Payment Method Filter */}
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px', fontSize: '0.75rem' }}>Payment Method:</label>
+            <select
+              value={paymentMethodFilter}
+              onChange={(e) => {
+                setPaymentMethodFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="filter-input"
+              style={{ minWidth: '150px', width: '150px', fontSize: '0.75rem' }}
+            >
+              <option value="">All Methods</option>
+              <option value="Cash">Cash</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cheque">Cheque</option>
+              <option value="Mobile Money">Mobile Money</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          {/* Currency Filter */}
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px', fontSize: '0.75rem' }}>Currency:</label>
+            <select
+              value={currencyFilter}
+              onChange={(e) => {
+                setCurrencyFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="filter-input"
+              style={{ minWidth: '150px', width: '150px', fontSize: '0.75rem' }}
+            >
+              <option value="">All Currencies</option>
+              {currencies.map((currency) => (
+                <option key={currency.id} value={currency.id}>
+                  {currency.name} ({currency.symbol})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <div className="filter-group">
+              <button
+                onClick={handleClearFilters}
+                className="filter-input"
+                style={{
+                  minWidth: 'auto',
+                  padding: '6px 12px',
+                  fontSize: '0.75rem',
+                  background: '#6b7280',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+                title="Clear all filters"
+              >
+                Clear Filters
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -715,8 +720,18 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         height: '100%'
       }}>
         {tableLoading && payments.length === 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-            Loading payments...
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading payments...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
@@ -770,12 +785,9 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                   <td style={{ padding: '4px 10px' }}>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <button
-                        onClick={() => {
-                          // View payment details
-                          console.log('View payment:', payment);
-                        }}
+                        onClick={() => handleViewPayment(payment)}
                         style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        title="View"
+                        title="View Payment Details"
                       >
                         <FontAwesomeIcon icon={faEye} />
                       </button>
@@ -843,8 +855,8 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       </div>
 
       {/* Record Payment Modal */}
-      {showPaymentModal && (
-        <div className="modal-overlay" onClick={handleClosePaymentModal}>
+      {showPaymentModal && !showConfirmation && (
+        <div className="modal-overlay" onClick={handleClosePaymentModal} style={{ zIndex: 1000 }}>
           <div
             className="modal-dialog"
             onClick={(e) => e.stopPropagation()}
@@ -868,7 +880,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                     <FontAwesomeIcon icon={faList} style={{ color: '#10b981' }} />
                     Payment Type <span className="required">*</span>
                   </h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                     <button
                       type="button"
                       onClick={() => setPaymentType('tuition')}
@@ -886,24 +898,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                     >
                       <FontAwesomeIcon icon={faGraduationCap} style={{ marginRight: '6px' }} />
                       Tuition Fees
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentType('boarding')}
-                      style={{
-                        padding: '12px',
-                        border: `2px solid ${paymentType === 'boarding' ? '#2563eb' : 'var(--border-color)'}`,
-                        borderRadius: '6px',
-                        background: paymentType === 'boarding' ? '#eff6ff' : 'white',
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        fontWeight: paymentType === 'boarding' ? 600 : 400,
-                        color: paymentType === 'boarding' ? '#2563eb' : 'var(--text-primary)',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faBed} style={{ marginRight: '6px' }} />
-                      Boarding Fees
                     </button>
                     <button
                       type="button"
@@ -1162,66 +1156,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                   </div>
                 )}
 
-                {/* Boarding Form - Hostel and Term Selection */}
-                {paymentType === 'boarding' && (
-                  <div style={{ marginBottom: '24px' }}>
-                    <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <FontAwesomeIcon icon={faBed} style={{ color: '#10b981' }} />
-                      Boarding Details
-                    </h4>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                      <div className="form-group">
-                        <label className="form-label">
-                          Hostel <span className="required">*</span>
-                        </label>
-                        <select
-                          value={boardingFormData.hostel_id}
-                          onChange={(e) => setBoardingFormData(prev => ({ ...prev, hostel_id: e.target.value }))}
-                          className="form-control"
-                          required
-                        >
-                          <option value="">Select Hostel</option>
-                          {hostels.map((hostel) => (
-                            <option key={hostel.id} value={hostel.id}>
-                              {hostel.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">
-                          Academic Year <span className="required">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={boardingFormData.academic_year}
-                          onChange={(e) => setBoardingFormData(prev => ({ ...prev, academic_year: e.target.value }))}
-                          className="form-control"
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">
-                          Term <span className="required">*</span>
-                        </label>
-                        <select
-                          value={boardingFormData.term}
-                          onChange={(e) => setBoardingFormData(prev => ({ ...prev, term: e.target.value }))}
-                          className="form-control"
-                          required
-                        >
-                          <option value="1">Term 1</option>
-                          <option value="2">Term 2</option>
-                          <option value="3">Term 3</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 {/* Payment Details - Conditional based on payment type */}
                 <div style={{ marginBottom: '24px' }}>
                   <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1237,12 +1171,10 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                       <input
                         type="number"
                         step="0.01"
-                        value={paymentType === 'tuition' ? tuitionFormData.amount : paymentType === 'boarding' ? boardingFormData.amount_paid : additionalFormData.payment_amount}
+                        value={paymentType === 'tuition' ? tuitionFormData.amount : additionalFormData.payment_amount}
                         onChange={(e) => {
                           if (paymentType === 'tuition') {
                             setTuitionFormData(prev => ({ ...prev, amount: e.target.value }));
-                          } else if (paymentType === 'boarding') {
-                            setBoardingFormData(prev => ({ ...prev, amount_paid: e.target.value }));
                           } else {
                             setAdditionalFormData(prev => ({ ...prev, payment_amount: e.target.value }));
                           }
@@ -1258,12 +1190,10 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                         Currency <span className="required">*</span>
                       </label>
                       <select
-                        value={paymentType === 'tuition' ? tuitionFormData.currency_id : paymentType === 'boarding' ? boardingFormData.currency_id : additionalFormData.currency_id}
+                        value={paymentType === 'tuition' ? tuitionFormData.currency_id : additionalFormData.currency_id}
                         onChange={(e) => {
                           if (paymentType === 'tuition') {
                             setTuitionFormData(prev => ({ ...prev, currency_id: e.target.value }));
-                          } else if (paymentType === 'boarding') {
-                            setBoardingFormData(prev => ({ ...prev, currency_id: e.target.value }));
                           } else {
                             setAdditionalFormData(prev => ({ ...prev, currency_id: e.target.value }));
                           }
@@ -1300,13 +1230,9 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                         </select>
                       ) : (
                         <select
-                          value={paymentType === 'boarding' ? boardingFormData.payment_method : additionalFormData.payment_method}
+                          value={additionalFormData.payment_method}
                           onChange={(e) => {
-                            if (paymentType === 'boarding') {
-                              setBoardingFormData(prev => ({ ...prev, payment_method: e.target.value }));
-                            } else {
-                              setAdditionalFormData(prev => ({ ...prev, payment_method: e.target.value }));
-                            }
+                            setAdditionalFormData(prev => ({ ...prev, payment_method: e.target.value }));
                           }}
                           className="form-control"
                           required
@@ -1327,12 +1253,10 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                       </label>
                       <input
                         type="date"
-                        value={paymentType === 'tuition' ? tuitionFormData.payment_date : paymentType === 'boarding' ? boardingFormData.payment_date : additionalFormData.payment_date}
+                        value={paymentType === 'tuition' ? tuitionFormData.payment_date : additionalFormData.payment_date}
                         onChange={(e) => {
                           if (paymentType === 'tuition') {
                             setTuitionFormData(prev => ({ ...prev, payment_date: e.target.value }));
-                          } else if (paymentType === 'boarding') {
-                            setBoardingFormData(prev => ({ ...prev, payment_date: e.target.value }));
                           } else {
                             setAdditionalFormData(prev => ({ ...prev, payment_date: e.target.value }));
                           }
@@ -1349,12 +1273,10 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <input
                           type="text"
-                          value={paymentType === 'tuition' ? tuitionFormData.reference_number : paymentType === 'boarding' ? boardingFormData.reference_number : additionalFormData.reference_number}
+                          value={paymentType === 'tuition' ? tuitionFormData.reference_number : additionalFormData.reference_number}
                           onChange={(e) => {
                             if (paymentType === 'tuition') {
                               setTuitionFormData(prev => ({ ...prev, reference_number: e.target.value }));
-                            } else if (paymentType === 'boarding') {
-                              setBoardingFormData(prev => ({ ...prev, reference_number: e.target.value }));
                             } else {
                               setAdditionalFormData(prev => ({ ...prev, reference_number: e.target.value }));
                             }
@@ -1370,8 +1292,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                             const refNum = generateReferenceNumber();
                             if (paymentType === 'tuition') {
                               setTuitionFormData(prev => ({ ...prev, reference_number: refNum }));
-                            } else if (paymentType === 'boarding') {
-                              setBoardingFormData(prev => ({ ...prev, reference_number: refNum }));
                             } else {
                               setAdditionalFormData(prev => ({ ...prev, reference_number: refNum }));
                             }
@@ -1393,12 +1313,10 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                     <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                       <label className="form-label">Notes</label>
                       <textarea
-                        value={paymentType === 'tuition' ? tuitionFormData.notes : paymentType === 'boarding' ? boardingFormData.notes : additionalFormData.notes}
+                        value={paymentType === 'tuition' ? tuitionFormData.notes : additionalFormData.notes}
                         onChange={(e) => {
                           if (paymentType === 'tuition') {
                             setTuitionFormData(prev => ({ ...prev, notes: e.target.value }));
-                          } else if (paymentType === 'boarding') {
-                            setBoardingFormData(prev => ({ ...prev, notes: e.target.value }));
                           } else {
                             setAdditionalFormData(prev => ({ ...prev, notes: e.target.value }));
                           }
@@ -1435,8 +1353,8 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       )}
 
       {/* Confirmation Modal */}
-      {showConfirmation && (
-        <div className="modal-overlay" onClick={handleCancelConfirmation}>
+      {showConfirmation && !showSuccessModal && !showErrorModal && (
+        <div className="modal-overlay" onClick={handleCancelConfirmation} style={{ zIndex: 1001 }}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Confirm Payment</h3>
@@ -1447,8 +1365,23 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
             <div className="modal-body">
               <div style={{ marginBottom: '16px' }}>
                 <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Student:</strong> {selectedStudent?.Name} {selectedStudent?.Surname}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Amount:</strong> {formData.amount} {currencies.find(c => c.id == formData.currency_id)?.symbol}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Reference:</strong> {formData.reference_number}</p>
+                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}>
+                  <strong>Amount:</strong> {
+                    paymentType === 'tuition' ? tuitionFormData.amount :
+                    additionalFormData.payment_amount
+                  } {
+                    currencies.find(c => c.id == (
+                      paymentType === 'tuition' ? tuitionFormData.currency_id :
+                      additionalFormData.currency_id
+                    ))?.symbol
+                  }
+                </p>
+                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}>
+                  <strong>Reference:</strong> {
+                    paymentType === 'tuition' ? tuitionFormData.reference_number :
+                    additionalFormData.reference_number
+                  }
+                </p>
               </div>
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                 <button onClick={handleCancelConfirmation} className="modal-btn modal-btn-cancel">Cancel</button>
@@ -1462,8 +1395,8 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       )}
 
       {/* Receipt Modal */}
-      {showReceipt && receipt && (
-        <div className="modal-overlay" onClick={() => setShowReceipt(false)}>
+      {showReceipt && receipt && !showSuccessModal && !showErrorModal && (
+        <div className="modal-overlay" onClick={() => setShowReceipt(false)} style={{ zIndex: 1002 }}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h3 className="modal-title">Payment Receipt</h3>
@@ -1484,6 +1417,143 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                 <button onClick={downloadReceipt} className="modal-btn modal-btn-confirm">Download PDF</button>
                 <button onClick={() => setShowReceipt(false)} className="modal-btn modal-btn-cancel">Close</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Payment Modal */}
+      {showViewModal && selectedPayment && (
+        <div className="modal-overlay" onClick={() => setShowViewModal(false)} style={{ zIndex: 1003 }}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Payment Details</h3>
+              <button className="modal-close-btn" onClick={() => setShowViewModal(false)}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {viewModalLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '40px' }}>
+                  <div className="loading-spinner"></div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Receipt Number
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                        {selectedPayment.receipt_number || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Reference Number
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                        {selectedPayment.reference_number || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Student Name
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                        {selectedPayment.student_name && selectedPayment.student_surname 
+                          ? `${selectedPayment.student_name} ${selectedPayment.student_surname}`
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Registration Number
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                        {selectedPayment.student_reg_number || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Payment Amount
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0, fontWeight: 600 }}>
+                        {selectedPayment.base_currency_amount || selectedPayment.payment_amount || 0} {selectedPayment.currency_symbol || selectedPayment.currency_name || ''}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Payment Method
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                        {selectedPayment.payment_method || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Payment Date
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                        {selectedPayment.payment_date 
+                          ? new Date(selectedPayment.payment_date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })
+                          : 'N/A'}
+                      </p>
+                    </div>
+                    {selectedPayment.exchange_rate && selectedPayment.exchange_rate !== 1 && (
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                          Exchange Rate
+                        </label>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
+                          {selectedPayment.exchange_rate}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {selectedPayment.notes && (
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Notes
+                      </label>
+                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0, padding: '8px', background: '#f9fafb', borderRadius: '4px' }}>
+                        {selectedPayment.notes}
+                      </p>
+                    </div>
+                  )}
+                  {selectedPayment.created_at && (
+                    <div>
+                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
+                        Created At
+                      </label>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+                        {new Date(selectedPayment.created_at).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedPayment(null);
+                }}
+                className="modal-btn modal-btn-cancel"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

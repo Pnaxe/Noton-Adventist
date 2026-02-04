@@ -469,26 +469,6 @@ const Results = () => {
   const displayEnd = Math.min(currentPage * limit, totalClasses);
   const hasData = classes.length > 0;
 
-  if (loading && classes.length === 0) {
-    return (
-      <div className="reports-container" style={{ 
-        height: '100%', 
-        maxHeight: '100%', 
-        overflow: 'hidden', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        position: 'relative',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-          <div className="loading-spinner"></div>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading classes...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="reports-container" style={{ 
       height: '100%', 

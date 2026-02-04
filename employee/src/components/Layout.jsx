@@ -9,7 +9,7 @@ const Layout = ({ children }) => {
     <div className="dashboard-container">
       <Sidebar open={sidebarOpen} setOpen={setSidebarOpen} />
       <main className="main-content">
-        <Header onMenuClick={() => setSidebarOpen(true)} />
+        <Header onMenuClick={() => setSidebarOpen((prev) => !prev)} />
         <div className="main-content-scrollable">
           {children}
         </div>

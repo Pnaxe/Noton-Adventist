@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const BoardingFeesPaymentsController = require('../../controllers/boarding/boardingFeesPaymentsController');
+const ReceiptController = require('../../controllers/receipts/receiptController');
 const { authenticateToken } = require('../../middleware/auth');
 const { requireRole } = require('../../middleware/auth');
 
@@ -15,6 +16,35 @@ router.get('/student/:studentRegNumber/summary', requireRole(['BOARDING_MANAGEME
 router.get('/:id', requireRole(['BOARDING_MANAGEMENT', 'BOARDING_VIEW', 'ACCOUNTING_MANAGEMENT', 'ACCOUNTING_VIEW', 'ADMIN']), BoardingFeesPaymentsController.getPaymentById);
 router.put('/:id', requireRole(['BOARDING_MANAGEMENT', 'ACCOUNTING_MANAGEMENT', 'ADMIN']), BoardingFeesPaymentsController.updatePayment);
 router.delete('/:id', requireRole(['BOARDING_MANAGEMENT', 'ACCOUNTING_MANAGEMENT', 'ADMIN']), BoardingFeesPaymentsController.deletePayment);
+
+// Receipt generation route (POST for backward compatibility with client)
+router.post('/download-receipt', requireRole(['BOARDING_MANAGEMENT', 'BOARDING_VIEW', 'ACCOUNTING_MANAGEMENT', 'ACCOUNTING_VIEW', 'ADMIN']), async (req, res, next) => {
+  try {
+    // Extract payment_id from body or use a receipt_number lookup
+    if (req.body.payment_id) {
+      req.params.payment_id = req.body.payment_id;
+      return await ReceiptController.generateBoardingPaymentReceipt(req, res);
+    }
+    // If receipt_number is provided, we need to look up the payment_id
+    // This is a fallback for the old client format
+    return res.status(400).json({
+      success: false,
+      message: 'payment_id is required. Please use GET /api/receipts/boarding-payment/:payment_id or provide payment_id in request body.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Receipt generation route (GET - preferred)
+router.get('/:id/receipt', requireRole(['BOARDING_MANAGEMENT', 'BOARDING_VIEW', 'ACCOUNTING_MANAGEMENT', 'ACCOUNTING_VIEW', 'ADMIN']), async (req, res, next) => {
+  try {
+    req.params.payment_id = req.params.id;
+    return await ReceiptController.generateBoardingPaymentReceipt(req, res);
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;
 
