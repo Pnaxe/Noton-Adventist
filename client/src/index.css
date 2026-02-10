@@ -64,6 +64,25 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .sidebar-footer {
@@ -141,6 +160,16 @@
   height: 100%;
 }
 
+.top-nav-bar--with-tabs {
+  height: auto;
+  padding: 0;
+}
+
+.top-nav-bar--with-tabs .top-nav-content {
+  height: 60px;
+  padding: 0 20px;
+}
+
 .top-nav-left {
   display: flex;
   align-items: center;
@@ -158,6 +187,27 @@
   display: flex;
   align-items: center;
   gap: 0;
+}
+
+/* Billing top tabs: allow horizontal scroll when items overflow */
+.billing-tabs {
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 8px;
+  scrollbar-width: none;
+}
+
+.billing-tabs::-webkit-scrollbar {
+  height: 0;
+}
+
+.billing-tabs-row {
+  border-top: 1px solid var(--border-color);
+  background: var(--card-bg);
 }
 
 .top-nav-menu-item {
@@ -310,6 +360,26 @@
   overflow-x: hidden;
   padding: 80px 20px 20px 20px;
   box-sizing: border-box;
+}
+
+.main-content-scrollable--billing {
+  padding-top: 130px;
+}
+
+.main-content-scrollable--billing .report-header {
+  margin-top: 0;
+}
+
+.main-content-scrollable--accounting {
+  padding-top: 160px;
+}
+
+.main-content-scrollable--accounting .report-header {
+  margin-top: 0;
+}
+
+.accounting-view-offset {
+  padding-top: 20px;
 }
 
 /* Reports Container Layout */

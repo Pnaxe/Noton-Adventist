@@ -334,9 +334,13 @@ class StudentTransactionController {
 
     // Helper method to create transaction (for use by other controllers)
     async createTransactionHelper(student_reg_number, transaction_type, amount, description, options = {}) {
-        const conn = await pool.getConnection();
+        const providedConn = options.conn || null;
+        const conn = providedConn || await pool.getConnection();
+        const shouldManageTransaction = !providedConn;
         try {
-            await conn.beginTransaction();
+            if (shouldManageTransaction) {
+                await conn.beginTransaction();
+            }
 
             const {
                 term,
@@ -364,13 +368,19 @@ class StudentTransactionController {
             // Update student balance
             await StudentBalanceService.updateBalanceOnTransaction(student_reg_number, transaction_type, amount, conn);
 
-            await conn.commit();
+            if (shouldManageTransaction) {
+                await conn.commit();
+            }
             return transactionId;
         } catch (error) {
-            await conn.rollback();
+            if (shouldManageTransaction) {
+                await conn.rollback();
+            }
             throw error;
         } finally {
-            conn.release();
+            if (!providedConn) {
+                conn.release();
+            }
         }
     }
 

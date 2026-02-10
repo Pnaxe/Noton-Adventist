@@ -330,36 +330,27 @@ const StudentFinancialRecord = () => {
               </div>
             ) : transactions.length > 0 ? (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 border border-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+                  <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--sidebar-bg)' }}>
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                        Date
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                        Type
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                        Description
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                        DR
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                        CR
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border border-gray-200">
-                        Balance
-                      </th>
+                      <th style={{ padding: '6px 10px' }}>DATE</th>
+                      <th style={{ padding: '6px 10px' }}>TYPE</th>
+                      <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right' }}>DR</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right' }}>CR</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right' }}>BALANCE</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody>
                     {transactions.map((transaction, index) => (
-                      <tr key={transaction.id || index} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900 border border-gray-200">
+                      <tr
+                        key={transaction.id || index}
+                        style={{ height: '32px', backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' }}
+                      >
+                        <td style={{ padding: '4px 10px' }}>
                           {new Date(transaction.payment_date).toLocaleDateString()}
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap border border-gray-200">
+                        <td style={{ padding: '4px 10px' }}>
                           <div className="flex items-center">
                             <FontAwesomeIcon 
                               icon={getTransactionTypeIcon(transaction.fee_type)} 
@@ -370,11 +361,10 @@ const StudentFinancialRecord = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-xs text-gray-900 border border-gray-200">
+                        <td style={{ padding: '4px 10px' }}>
                           {transaction.notes || `${transaction.fee_type} payment`}
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-right border border-gray-200">
-                          {/* DR: Charges/Invoices (what student owes) */}
+                        <td style={{ padding: '4px 10px', textAlign: 'right' }}>
                           {(() => {
                             console.log('Rendering DR column for transaction:', {
                               id: transaction.id,
@@ -391,8 +381,7 @@ const StudentFinancialRecord = () => {
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-right border border-gray-200">
-                          {/* CR: Payments (what student has paid) */}
+                        <td style={{ padding: '4px 10px', textAlign: 'right' }}>
                           {(() => {
                             console.log('Rendering CR column for transaction:', {
                               id: transaction.id,
@@ -409,7 +398,7 @@ const StudentFinancialRecord = () => {
                             );
                           })()}
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs text-right font-medium border border-gray-200">
+                        <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600 }}>
                           <span className={transaction.running_balance >= 0 ? 'text-green-600' : 'text-red-600'}>
                             {formatCurrency(transaction.running_balance || 0, transaction.currency_symbol)}
                           </span>

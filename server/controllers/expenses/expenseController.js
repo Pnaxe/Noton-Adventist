@@ -94,10 +94,12 @@ class ExpenseController {
   async createExpense(req, res) {
     const conn = await pool.getConnection();
     try {
-      const { supplier_id, amount, currency_id, expense_date, description, payment_method, payment_status, expense_account_id, amount_paid } = req.body;
+      const { supplier_id, amount, currency_id, expense_date, description, payment_method, payment_status, expense_account_id, amount_paid, payment_account_id } = req.body;
       if (!amount || !currency_id || !expense_date || !payment_method || !payment_status || !expense_account_id) {
         return res.status(400).json({ success: false, message: 'Required fields missing' });
       }
+      const normalizedMethod = String(payment_method || '').toLowerCase();
+      const resolvedPaymentMethod = normalizedMethod.includes('bank') ? 'bank' : 'cash';
       
       // Validate partial payment
       if (payment_status === 'partial') {
@@ -114,15 +116,15 @@ class ExpenseController {
       // 1. Insert into expenses (journal_entry_id will be updated after journal entry is created)
       const [expenseResult] = await conn.execute(
         `INSERT INTO expenses (supplier_id, amount, currency_id, expense_date, description, payment_method, payment_status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [supplier_id || null, amount, currency_id, expense_date, description || null, payment_method, payment_status]
+        [supplier_id || null, amount, currency_id, expense_date, description || null, resolvedPaymentMethod, payment_status]
       );
       const expenseId = expenseResult.insertId;
       
       // 2. Create journal entry
       const journalDesc = description || 'Expense';
       let journalName;
-      if (payment_method === 'cash') journalName = 'Cash Payments Journal';
-      else if (payment_method === 'bank') journalName = 'Bank Payments Journal';
+      if (resolvedPaymentMethod === 'cash') journalName = 'Cash Payments Journal';
+      else if (resolvedPaymentMethod === 'bank') journalName = 'Bank Payments Journal';
       else journalName = 'General Journal';
       
       // Get or create journal
@@ -160,21 +162,29 @@ class ExpenseController {
       // 4. Create transaction record
       const [transactionResult] = await conn.execute(
         `INSERT INTO transactions (transaction_type, amount, currency_id, transaction_date, payment_method, description, journal_entry_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        ['expense', amount, currency_id, expense_date, payment_method, description || 'Expense', journalEntryId]
+        ['expense', amount, currency_id, expense_date, resolvedPaymentMethod, description || 'Expense', journalEntryId]
       );
       const transactionId = transactionResult.insertId;
       
       // 5. Create journal entry lines (double-entry)
       let creditAccountCode;
-      if (payment_method === 'cash') creditAccountCode = 1000;  // Cash on Hand
-      else if (payment_method === 'bank') creditAccountCode = 1010;  // Bank Account
-      else if (payment_method === 'credit') creditAccountCode = 2000;  // Accounts Payable
+      if (resolvedPaymentMethod === 'cash') creditAccountCode = 1000;  // Cash on Hand
+      else if (resolvedPaymentMethod === 'bank') creditAccountCode = 1010;  // Bank Account
+      else if (resolvedPaymentMethod === 'credit') creditAccountCode = 2000;  // Accounts Payable
       else creditAccountCode = 1000;  // Default to Cash on Hand
       if (payment_status === 'debt') creditAccountCode = 2100;  // Accrued Expenses
       
       // Use the selected expense account from the frontend
       const [[expenseAccount]] = await conn.execute(`SELECT id FROM chart_of_accounts WHERE id = ? LIMIT 1`, [expense_account_id]);
-      const [[creditAccount]] = await conn.execute(`SELECT id FROM chart_of_accounts WHERE code = ? LIMIT 1`, [creditAccountCode.toString()]);
+      let creditAccount = null;
+      if (payment_account_id && (resolvedPaymentMethod === 'cash' || resolvedPaymentMethod === 'bank')) {
+        const [[selectedAccount]] = await conn.execute(`SELECT id FROM chart_of_accounts WHERE id = ? LIMIT 1`, [payment_account_id]);
+        creditAccount = selectedAccount || null;
+      }
+      if (!creditAccount) {
+        const [[fallbackAccount]] = await conn.execute(`SELECT id FROM chart_of_accounts WHERE code = ? LIMIT 1`, [creditAccountCode.toString()]);
+        creditAccount = fallbackAccount || null;
+      }
       if (!expenseAccount || !creditAccount) throw new Error('Account not found');
       
       if (payment_status === 'partial') {
@@ -224,7 +234,7 @@ class ExpenseController {
             amount_paid: paidAmount,
             remaining_amount: remainingAmount,
             currency_id: currency_id,
-            payment_method: payment_method,
+            payment_method: resolvedPaymentMethod,
             payment_status: payment_status
           },
           ip_address: req.ip,
@@ -242,7 +252,7 @@ class ExpenseController {
         );
         
         // If this is a credit purchase, create accounts payable balance record
-        if (payment_method === 'credit' || payment_status === 'debt') {
+        if (resolvedPaymentMethod === 'credit' || payment_status === 'debt') {
           const [balanceResult] = await conn.execute(
             `INSERT INTO accounts_payable_balances (supplier_id, currency_id, original_expense_id, original_amount, outstanding_balance) VALUES (?, ?, ?, ?, ?)`,
             [supplier_id || null, currency_id, expenseId, amount, amount]
@@ -259,7 +269,7 @@ class ExpenseController {
               supplier_id: supplier_id || null,
               amount: amount,
               currency_id: currency_id,
-              payment_method: payment_method,
+              payment_method: resolvedPaymentMethod,
               payment_status: payment_status
             },
             ip_address: req.ip,
@@ -287,15 +297,17 @@ class ExpenseController {
     const conn = await pool.getConnection();
     try {
       const { id } = req.params;
-      const { supplier_id, amount, currency_id, expense_date, description, payment_method, payment_status, expense_account_id } = req.body;
+      const { supplier_id, amount, currency_id, expense_date, description, payment_method, payment_status, expense_account_id, payment_account_id, amount_paid } = req.body;
       if (!expense_account_id) {
         return res.status(400).json({ success: false, message: 'Expense account is required' });
       }
+      const normalizedMethod = String(payment_method || '').toLowerCase();
+      const resolvedPaymentMethod = normalizedMethod.includes('bank') ? 'bank' : 'cash';
       await conn.beginTransaction();
       // 1. Update the expense
       const [result] = await conn.execute(
         `UPDATE expenses SET supplier_id = ?, amount = ?, currency_id = ?, expense_date = ?, description = ?, payment_method = ?, payment_status = ? WHERE id = ?`,
-        [supplier_id || null, amount, currency_id, expense_date, description || null, payment_method, payment_status, id]
+        [supplier_id || null, amount, currency_id, expense_date, description || null, resolvedPaymentMethod, payment_status, id]
       );
       if (result.affectedRows === 0) {
         await conn.rollback();
@@ -313,36 +325,110 @@ class ExpenseController {
           'UPDATE journal_entries SET entry_date = ?, description = ? WHERE id = ?',
           [expense_date, description || 'Expense', journalEntryId]
         );
-        // 4. Update the journal entry lines (debit and credit)
+        // 4. Update the journal entry lines (delete and reinsert)
         // Find the expense and payment method account IDs
         const [[expenseAccount]] = await conn.execute(
           `SELECT id FROM chart_of_accounts WHERE id = ? LIMIT 1`,
           [expense_account_id]
         );
         let creditAccountCode;
-        if (payment_method === 'cash') creditAccountCode = 1000;
-        else if (payment_method === 'bank') creditAccountCode = 1010;
-        else if (payment_method === 'credit') creditAccountCode = 2000;
+        if (resolvedPaymentMethod === 'cash') creditAccountCode = 1000;
+        else if (resolvedPaymentMethod === 'bank') creditAccountCode = 1010;
+        else if (resolvedPaymentMethod === 'credit') creditAccountCode = 2000;
         else creditAccountCode = 1000;
         if (payment_status === 'debt') creditAccountCode = 2100;
-        const [[creditAccount]] = await conn.execute(
-          `SELECT id FROM chart_of_accounts WHERE code = ? LIMIT 1`,
-          [creditAccountCode.toString()]
-        );
+        let creditAccount = null;
+        if (payment_account_id && (resolvedPaymentMethod === 'cash' || resolvedPaymentMethod === 'bank')) {
+          const [[selectedAccount]] = await conn.execute(`SELECT id FROM chart_of_accounts WHERE id = ? LIMIT 1`, [payment_account_id]);
+          creditAccount = selectedAccount || null;
+        }
+        if (!creditAccount) {
+          const [[fallbackAccount]] = await conn.execute(
+            `SELECT id FROM chart_of_accounts WHERE code = ? LIMIT 1`,
+            [creditAccountCode.toString()]
+          );
+          creditAccount = fallbackAccount || null;
+        }
         if (!expenseAccount || !creditAccount) {
           await conn.rollback();
           return res.status(400).json({ success: false, message: 'Account not found' });
         }
-        // Update debit line
-        await conn.execute(
-          `UPDATE journal_entry_lines SET account_id = ?, debit = ?, credit = 0, currency_id = ? WHERE journal_entry_id = ? AND debit > 0`,
-          [expenseAccount.id, amount, currency_id, journalEntryId]
-        );
-        // Update credit line
-        await conn.execute(
-          `UPDATE journal_entry_lines SET account_id = ?, debit = 0, credit = ?, currency_id = ? WHERE journal_entry_id = ? AND credit > 0`,
-          [creditAccount.id, amount, currency_id, journalEntryId]
-        );
+        // Remove previous lines, then insert new ones
+        await conn.execute(`DELETE FROM journal_entry_lines WHERE journal_entry_id = ?`, [journalEntryId]);
+
+        if (payment_status === 'partial') {
+          let paidAmount = amount_paid ? parseFloat(amount_paid) : null;
+          let remainingAmount = null;
+          if (paidAmount === null || Number.isNaN(paidAmount)) {
+            const [[existingBalance]] = await conn.execute(
+              `SELECT paid_amount, outstanding_balance, original_amount 
+               FROM accounts_payable_balances 
+               WHERE original_expense_id = ? 
+               ORDER BY id DESC LIMIT 1`,
+              [id]
+            );
+            if (existingBalance) {
+              paidAmount = parseFloat(existingBalance.paid_amount || 0);
+              remainingAmount = parseFloat(existingBalance.outstanding_balance || 0);
+            } else {
+              paidAmount = parseFloat(amount);
+              remainingAmount = 0;
+            }
+          } else {
+            remainingAmount = parseFloat(amount) - paidAmount;
+          }
+
+          const [[payableAccount]] = await conn.execute(`SELECT id FROM chart_of_accounts WHERE code = '2000' LIMIT 1`);
+          if (!payableAccount) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Accounts Payable account not found' });
+          }
+
+          await conn.execute(
+            `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, ?, 0, ?)`,
+            [journalEntryId, expenseAccount.id, paidAmount, currency_id]
+          );
+          await conn.execute(
+            `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, 0, ?, ?)`,
+            [journalEntryId, creditAccount.id, paidAmount, currency_id]
+          );
+          if (remainingAmount > 0) {
+            await conn.execute(
+              `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, ?, 0, ?)`,
+              [journalEntryId, expenseAccount.id, remainingAmount, currency_id]
+            );
+            await conn.execute(
+              `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, 0, ?, ?)`,
+              [journalEntryId, payableAccount.id, remainingAmount, currency_id]
+            );
+          }
+        } else if (payment_status === 'debt' || resolvedPaymentMethod === 'credit') {
+          const [[payableAccount]] = await conn.execute(
+            `SELECT id FROM chart_of_accounts WHERE code = ? LIMIT 1`,
+            [payment_status === 'debt' ? '2100' : '2000']
+          );
+          if (!payableAccount) {
+            await conn.rollback();
+            return res.status(400).json({ success: false, message: 'Accounts Payable account not found' });
+          }
+          await conn.execute(
+            `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, ?, 0, ?)`,
+            [journalEntryId, expenseAccount.id, amount, currency_id]
+          );
+          await conn.execute(
+            `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, 0, ?, ?)`,
+            [journalEntryId, payableAccount.id, amount, currency_id]
+          );
+        } else {
+          await conn.execute(
+            `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, ?, 0, ?)`,
+            [journalEntryId, expenseAccount.id, amount, currency_id]
+          );
+          await conn.execute(
+            `INSERT INTO journal_entry_lines (journal_entry_id, account_id, debit, credit, currency_id) VALUES (?, ?, 0, ?, ?)`,
+            [journalEntryId, creditAccount.id, amount, currency_id]
+          );
+        }
         
         // 5. Recalculate account balances after updating journal entries
         await AccountBalanceService.recalculateAllAccountBalances();

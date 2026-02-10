@@ -38,35 +38,90 @@ class IncomeStatementController {
         console.log(`  - ${entry.entry_date} | ${entry.reference || 'No Ref'} | ${entry.description}`);
       });
       
-      // Get revenue from journal entries - CREDITS to Revenue accounts (4000-4999)
-      // Revenue is recognized when invoices are created (DEBIT Accounts Receivable, CREDIT Revenue)
-      const revenueQuery = `
-        SELECT 
-          coa.id as account_id,
-          coa.code as account_code,
-          coa.name as account_name,
-          COALESCE(SUM(jel.credit), 0) as amount
-        FROM chart_of_accounts coa
-        INNER JOIN journal_entry_lines jel ON jel.account_id = coa.id
-        INNER JOIN journal_entries je ON je.id = jel.journal_entry_id
-        WHERE coa.type = 'Revenue'
-          AND coa.is_active = 1
-          AND je.entry_date BETWEEN ? AND ?
-          AND jel.credit > 0
-          AND je.description NOT LIKE '%Opening Balances B/D%'
-          AND je.description NOT LIKE '%Close % to Income Summary%'
-          AND je.description NOT LIKE '%Close Income Summary to Retained Earnings%'
-        GROUP BY coa.id, coa.code, coa.name
-        ORDER BY coa.code
-      `;
-      
-      const [revenue] = await pool.execute(revenueQuery, [period.start_date, period.end_date]);
-      
-      console.log(`💰 Revenue Query Results (${revenue.length} rows):`);
-      revenue.forEach(item => {
-        console.log(`  - ${item.account_name} (${item.account_code}): $${item.amount}`);
-      });
-      
+      // Revenue from enrollment events (accrual) - based on enrollments in the period
+      const [[tuitionRevenueAccount]] = await pool.execute(
+        `SELECT id, code, name 
+         FROM chart_of_accounts 
+         WHERE code = ? AND type = ? LIMIT 1`,
+        ['4000', 'Revenue']
+      );
+      const [[boardingRevenueAccount]] = await pool.execute(
+        `SELECT id, code, name 
+         FROM chart_of_accounts 
+         WHERE code = ? AND type = ? LIMIT 1`,
+        ['4040', 'Revenue']
+      );
+      const [[fallbackRevenueAccount]] = await pool.execute(
+        `SELECT id, code, name 
+         FROM chart_of_accounts 
+         WHERE type = ? LIMIT 1`,
+        ['Revenue']
+      );
+      const tuitionAccountRow = tuitionRevenueAccount || fallbackRevenueAccount || { id: null, code: '4000', name: 'Tuition Revenue' };
+      const boardingAccountRow = boardingRevenueAccount || fallbackRevenueAccount || { id: null, code: '4040', name: 'Boarding Revenue' };
+
+      const [tuitionRevenueRows] = await pool.execute(
+        `SELECT 
+           gc.id as class_id,
+           gc.name as class_name,
+           s.name as stream_name,
+           COALESCE(SUM(isr.total_amount), 0) as amount
+         FROM enrollments_gradelevel_classes e
+         INNER JOIN gradelevel_classes gc ON gc.id = e.gradelevel_class_id
+         LEFT JOIN stream s ON s.id = gc.stream_id
+         INNER JOIN class_term_year cty ON cty.gradelevel_class_id = e.gradelevel_class_id
+         INNER JOIN invoice_structures isr 
+           ON isr.gradelevel_class_id = e.gradelevel_class_id 
+          AND isr.term = cty.term 
+          AND isr.academic_year = cty.academic_year
+         WHERE e.status = 'active'
+           AND DATE(e.created_at) BETWEEN ? AND ?
+         GROUP BY gc.id, gc.name, s.name
+         ORDER BY gc.name`,
+        [period.start_date, period.end_date]
+      );
+
+      const [boardingRevenueRows] = await pool.execute(
+        `SELECT 
+           h.id as hostel_id,
+           h.name as hostel_name,
+           COALESCE(SUM(bf.amount), 0) as amount
+         FROM boarding_enrollments be
+         INNER JOIN hostels h ON h.id = be.hostel_id
+         INNER JOIN boarding_fees bf 
+           ON bf.hostel_id = be.hostel_id 
+          AND bf.term = be.term 
+          AND bf.academic_year = be.academic_year
+         WHERE be.status <> 'cancelled'
+           AND DATE(be.created_at) BETWEEN ? AND ?
+         GROUP BY h.id, h.name
+         ORDER BY h.name`,
+        [period.start_date, period.end_date]
+      );
+
+      const revenue = [
+        ...tuitionRevenueRows
+          .filter(row => parseFloat(row.amount || 0) > 0)
+          .map(row => ({
+            account_id: tuitionAccountRow.id,
+            account_code: `TUITION-${row.class_id}`,
+            account_name: `Tuition - ${row.class_name}${row.stream_name ? ` (${row.stream_name})` : ''}`,
+            amount: row.amount
+          })),
+        ...boardingRevenueRows
+          .filter(row => parseFloat(row.amount || 0) > 0)
+          .map(row => ({
+            account_id: boardingAccountRow.id,
+            account_code: `BOARDING-${row.hostel_id}`,
+            account_name: `Boarding - ${row.hostel_name}`,
+            amount: row.amount
+          }))
+      ];
+
+      const tuitionTotal = tuitionRevenueRows.reduce((sum, row) => sum + parseFloat(row.amount || 0), 0);
+      const boardingTotal = boardingRevenueRows.reduce((sum, row) => sum + parseFloat(row.amount || 0), 0);
+      console.log(`💰 Enrollment Revenue (Tuition): ${tuitionTotal}`);
+      console.log(`💰 Enrollment Revenue (Boarding): ${boardingTotal}`);
       // Get expenses from journal entries - DEBITS to Expense accounts (5000-5999)
       // This includes all expenses recorded in journal entries, not just those in expenses table
       const expenseQuery = `
@@ -560,3 +615,5 @@ class IncomeStatementController {
 }
 
 module.exports = IncomeStatementController;
+
+

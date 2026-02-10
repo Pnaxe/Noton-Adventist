@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { useNavigate } from 'react-router-dom';
 import { 
   faUsers, 
   faPlus,
@@ -23,6 +24,7 @@ import AddGradelevelClass from './gradelevel/AddGradelevelClass';
 
 const Classes = () => {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [gradelevelClasses, setGradelevelClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -48,25 +50,7 @@ const Classes = () => {
   // Toast states
   const [toast, setToast] = useState({ message: null, type: 'success', visible: false });
   
-  // View modal states
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [viewModalLoading, setViewModalLoading] = useState(false);
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [classStudents, setClassStudents] = useState([]);
-  const [studentsLoading, setStudentsLoading] = useState(false);
-  
-  // Add student modal states
-  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
-  const [studentSearchTerm, setStudentSearchTerm] = useState('');
-  const [studentSearchResults, setStudentSearchResults] = useState([]);
-  const [studentSearchLoading, setStudentSearchLoading] = useState(false);
-  const [addStudentLoading, setAddStudentLoading] = useState(null);
-  const [addStudentError, setAddStudentError] = useState('');
-  
-  // Remove student modal states
-  const [showRemoveStudentModal, setShowRemoveStudentModal] = useState(false);
-  const [enrollmentToRemove, setEnrollmentToRemove] = useState(null);
-  const [isRemovingStudent, setIsRemovingStudent] = useState(false);
+  // View modal states removed (navigate to page instead)
   
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -126,12 +110,6 @@ const Classes = () => {
   const [closeTermLoading, setCloseTermLoading] = useState(false);
   const [closeTermError, setCloseTermError] = useState('');
   const [closeTermSuccess, setCloseTermSuccess] = useState('');
-  const [showCloseTermConfirmation, setShowCloseTermConfirmation] = useState(false);
-  const [openTermForm, setOpenTermForm] = useState({
-    new_term: '',
-    new_academic_year: ''
-  });
-  const [closeTermTab, setCloseTermTab] = useState('close'); // 'close' or 'open'
 
   useEffect(() => {
     fetchGradelevelClasses();
@@ -146,21 +124,15 @@ const Classes = () => {
     }
   }, [activeTab]);
 
-  // Auto-search students when typing
+  // Fetch configurations data when configuration tab is active
   useEffect(() => {
-    if (!showAddStudentModal) return;
+    if (activeTab === 'configurations') {
+      fetchStreams();
+      fetchSubjects();
+    }
+  }, [activeTab, token]);
 
-    const timeoutId = setTimeout(() => {
-      if (studentSearchTerm.trim().length >= 2) {
-        performStudentSearch(studentSearchTerm);
-      } else {
-        setStudentSearchResults([]);
-      }
-    }, 500); // 500ms debounce delay
-
-    return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [studentSearchTerm, showAddStudentModal]);
+  // Note: class view is now a dedicated page, not a modal
 
   const fetchStreams = async () => {
     try {
@@ -342,169 +314,9 @@ const Classes = () => {
     }
   };
 
-  // View modal functions
-  const handleViewClass = async (classId) => {
-    setShowViewModal(true);
-    setViewModalLoading(true);
-    setSelectedClass(null);
-    setClassStudents([]);
-
-    try {
-      const response = await axios.get(`${BASE_URL}/classes/gradelevel-classes/${classId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      setSelectedClass(response.data.data);
-      await fetchClassStudents(classId);
-    } catch (err) {
-      console.error('Error fetching class:', err);
-      showToast('Failed to load class details', 'error');
-      setShowViewModal(false);
-    } finally {
-      setViewModalLoading(false);
-    }
-  };
-
-  const fetchClassStudents = async (classId) => {
-    setStudentsLoading(true);
-    try {
-      const response = await axios.get(`${BASE_URL}/classes/gradelevel-enrollments`, {
-        params: { gradelevel_class_id: classId },
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setClassStudents(response.data.data || []);
-      }
-    } catch (err) {
-      console.error('Error fetching students:', err);
-    } finally {
-      setStudentsLoading(false);
-    }
-  };
-
-  // Add student functions
-  const performStudentSearch = async (searchQuery) => {
-    if (!searchQuery || searchQuery.trim().length < 2) {
-      setStudentSearchResults([]);
-      return;
-    }
-
-    setStudentSearchLoading(true);
-    setAddStudentError('');
-    setStudentSearchResults([]);
-    try {
-      const response = await axios.get(`${BASE_URL}/students/search`, {
-        params: { query: searchQuery },
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setStudentSearchResults(response.data.data || []);
-      } else {
-        setAddStudentError('Failed to search students.');
-      }
-    } catch (err) {
-      setAddStudentError('Failed to search students.');
-    } finally {
-      setStudentSearchLoading(false);
-    }
-  };
-
-  const handleSearchStudents = async (e) => {
-    e.preventDefault();
-    await performStudentSearch(studentSearchTerm);
-  };
-
-  const handleAddStudentToClass = async (student) => {
-    if (!selectedClass) return;
-    setAddStudentLoading(student.RegNumber);
-    setAddStudentError('');
-    try {
-      const response = await axios.post(`${BASE_URL}/classes/gradelevel-enrollments`, {
-        student_regnumber: student.RegNumber,
-        gradelevel_class_id: selectedClass.id
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setShowAddStudentModal(false);
-        setStudentSearchTerm('');
-        setStudentSearchResults([]);
-        await fetchClassStudents(selectedClass.id);
-        showToast(`Student ${student.Name} ${student.Surname} has been successfully added to the class!`, 'success');
-        // Reopen view modal after successfully adding student
-        if (selectedClass) {
-          setShowViewModal(true);
-        }
-      } else {
-        setAddStudentError(response.data.message || 'Failed to add student.');
-      }
-    } catch (err) {
-      setAddStudentError(err.response?.data?.message || 'Failed to add student.');
-    } finally {
-      setAddStudentLoading(null);
-    }
-  };
-
-  const handleRemoveStudentClick = (enrollment) => {
-    setEnrollmentToRemove(enrollment);
-    setShowRemoveStudentModal(true);
-  };
-
-  const handleCloseRemoveStudentModal = () => {
-    setShowRemoveStudentModal(false);
-    setEnrollmentToRemove(null);
-    setIsRemovingStudent(false);
-  };
-
-  const handleRemoveStudent = async () => {
-    if (!enrollmentToRemove) return;
-    
-    setIsRemovingStudent(true);
-    try {
-      await axios.delete(`${BASE_URL}/classes/gradelevel-enrollments/${enrollmentToRemove.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (selectedClass) {
-        await fetchClassStudents(selectedClass.id);
-        const studentName = `${enrollmentToRemove.Name} ${enrollmentToRemove.Surname}`;
-        showToast(`${studentName} has been successfully unenrolled from the class!`, 'success');
-      }
-      handleCloseRemoveStudentModal();
-    } catch (err) {
-      console.error('Error removing student:', err);
-      showToast('Failed to unenroll student', 'error');
-    } finally {
-      setIsRemovingStudent(false);
-    }
-  };
-
-  const handleCloseViewModal = () => {
-    setShowViewModal(false);
-    setSelectedClass(null);
-    setViewModalLoading(false);
-    setClassStudents([]);
-    setShowAddStudentModal(false);
-    setStudentSearchTerm('');
-    setStudentSearchResults([]);
-  };
-
-  const handleOpenAddStudentModal = () => {
-    setShowViewModal(false);
-    setShowAddStudentModal(true);
-  };
-
-  const handleCloseAddStudentModal = () => {
-    setShowAddStudentModal(false);
-    setStudentSearchTerm('');
-    setStudentSearchResults([]);
-    setAddStudentError('');
-    // Reopen view modal if we have a selected class
-    if (selectedClass) {
-      setShowViewModal(true);
-    }
+  // View gradelevel class page
+  const handleViewClass = (classId) => {
+    navigate(`/dashboard/classes/gradelevel-classes/view/${classId}`);
   };
 
   // Edit modal functions
@@ -761,12 +573,19 @@ const Classes = () => {
 
   // Class Configurations functions
   const fetchSubjects = async () => {
+    if (!token) {
+      console.warn('Missing auth token while fetching subjects.');
+      return;
+    }
     try {
       const response = await axios.get(`${BASE_URL}/classes/subjects`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success) {
         setSubjects(response.data.data || []);
+      }
+      else {
+        console.warn('Failed to load subjects:', response.data?.message);
       }
     } catch (err) {
       console.error('Error fetching subjects:', err);
@@ -895,47 +714,36 @@ const Classes = () => {
   // Close to Term functions
   const handleCloseToTerm = async () => {
     try {
+      if (!ensureCloseTermPermission()) {
+        return;
+      }
       setCloseTermLoading(true);
       setCloseTermError('');
       setCloseTermSuccess('');
       const response = await axios.post(`${BASE_URL}/close-to-term/close-to-term`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-      if (response.data.success) {
-        setCloseTermSuccess(`Close to Term completed successfully! ${response.data.data.closed_count} enrollments closed.`);
-        setShowCloseTermConfirmation(false);
-      }
+        if (response.data.success) {
+          setCloseTermSuccess(`Close to Term completed successfully! ${response.data.data.closed_count} enrollments closed.`);
+        } else {
+          setCloseTermError(response.data?.message || 'Failed to close term');
+        }
     } catch (err) {
       setCloseTermError(err.response?.data?.message || 'Failed to close term');
-      setShowCloseTermConfirmation(false);
     } finally {
       setCloseTermLoading(false);
     }
   };
 
-  const handleOpenToTerm = async () => {
-    if (!openTermForm.new_term || !openTermForm.new_academic_year) {
-      setCloseTermError('Please enter both term and academic year');
-      return;
+  const ensureCloseTermPermission = () => {
+    if (!token) {
+      setCloseTermError('Missing authentication. Please log in again.');
+      return false;
     }
-    try {
-      setCloseTermLoading(true);
-      setCloseTermError('');
-      setCloseTermSuccess('');
-      const response = await axios.post(`${BASE_URL}/close-to-term/open-to-term`, openTermForm, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.success) {
-        setCloseTermSuccess(`Open to Term completed successfully! ${response.data.data.classes_updated} classes updated.`);
-        setShowCloseTermConfirmation(false);
-        setOpenTermForm({ new_term: '', new_academic_year: '' });
-      }
-    } catch (err) {
-      setCloseTermError(err.response?.data?.message || 'Failed to open term');
-      setShowCloseTermConfirmation(false);
-    } finally {
-      setCloseTermLoading(false);
-    }
+    return true;
   };
 
   // Calculate display ranges for pagination
@@ -1662,39 +1470,19 @@ const Classes = () => {
         {/* Close to Term Tab */}
         {activeTab === 'close-term' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Tabs for Close/Open */}
             <div style={{ borderBottom: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', gap: '16px' }}>
-                <button
-                  onClick={() => setCloseTermTab('close')}
+                <div
                   style={{
                     padding: '8px 16px',
                     fontSize: '0.75rem',
-                    fontWeight: 500,
-                    border: 'none',
-                    borderBottom: `2px solid ${closeTermTab === 'close' ? '#2563eb' : 'transparent'}`,
-                    background: 'transparent',
-                    color: closeTermTab === 'close' ? '#2563eb' : 'var(--text-secondary)',
-                    cursor: 'pointer'
+                    fontWeight: 600,
+                    borderBottom: '2px solid #2563eb',
+                    color: '#2563eb'
                   }}
                 >
                   Close to Term
-                </button>
-                <button
-                  onClick={() => setCloseTermTab('open')}
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '0.75rem',
-                    fontWeight: 500,
-                    border: 'none',
-                    borderBottom: `2px solid ${closeTermTab === 'open' ? '#2563eb' : 'transparent'}`,
-                    background: 'transparent',
-                    color: closeTermTab === 'open' ? '#2563eb' : 'var(--text-secondary)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Open to Term
-                </button>
+                </div>
               </div>
             </div>
 
@@ -1732,75 +1520,28 @@ const Classes = () => {
               </div>
             )}
 
-            {closeTermTab === 'close' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ background: '#f9fafb', padding: '16px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                    Close Current Term
-                  </h4>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                    This will de-enroll all students from their current classes. This action cannot be undone.
-                  </p>
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Are you sure you want to close the current term? This will de-enroll all students.')) {
-                        handleCloseToTerm();
-                      }
-                    }}
-                    className="modal-btn modal-btn-delete"
-                    disabled={closeTermLoading}
-                    style={{ padding: '8px 16px' }}
-                  >
-                    {closeTermLoading ? 'Closing...' : 'Close to Term'}
-                  </button>
-                </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ background: '#f9fafb', padding: '16px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                  Close Current Term
+                </h4>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                  This will de-enroll all students from their current classes. This action cannot be undone.
+                </p>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to close the current term? This will de-enroll all students.')) {
+                      handleCloseToTerm();
+                    }
+                  }}
+                  className="modal-btn modal-btn-delete"
+                  disabled={closeTermLoading}
+                  style={{ padding: '8px 16px' }}
+                >
+                  {closeTermLoading ? 'Closing...' : 'Close to Term'}
+                </button>
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ background: '#f9fafb', padding: '16px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                  <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px' }}>
-                    Open to New Term
-                  </h4>
-                  <form onSubmit={(e) => { e.preventDefault(); handleOpenToTerm(); }} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <div className="form-group">
-                      <label className="form-label">New Term <span className="required">*</span></label>
-                      <select
-                        name="new_term"
-                        value={openTermForm.new_term}
-                        onChange={(e) => setOpenTermForm({ ...openTermForm, new_term: e.target.value })}
-                        className="form-control"
-                        required
-                      >
-                        <option value="">Select term</option>
-                        <option value="1">Term 1</option>
-                        <option value="2">Term 2</option>
-                        <option value="3">Term 3</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">New Academic Year <span className="required">*</span></label>
-                      <input
-                        type="text"
-                        name="new_academic_year"
-                        value={openTermForm.new_academic_year}
-                        onChange={(e) => setOpenTermForm({ ...openTermForm, new_academic_year: e.target.value })}
-                        className="form-control"
-                        placeholder="e.g., 2024"
-                        required
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="modal-btn modal-btn-confirm"
-                      disabled={closeTermLoading}
-                      style={{ padding: '8px 16px', width: 'fit-content' }}
-                    >
-                      {closeTermLoading ? 'Opening...' : 'Open to Term'}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
       </div>
@@ -1972,299 +1713,6 @@ const Classes = () => {
         </div>
       )}
 
-      {/* View Class Modal */}
-      {showViewModal && (
-        <div className="modal-overlay" onClick={handleCloseViewModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '900px', width: '90%', maxHeight: '90vh', minHeight: viewModalLoading ? '400px' : 'auto' }}
-          >
-            {viewModalLoading ? (
-              // Loading State
-              <>
-                <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ height: '20px', width: '200px', background: '#e5e7eb', borderRadius: '4px' }}></div>
-                  <div style={{ width: '18px', height: '18px', background: '#e5e7eb', borderRadius: '4px' }}></div>
-                </div>
-                <div className="modal-body" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', flex: '1', minHeight: '300px' }}>
-                  <div className="loading-spinner"></div>
-                  <p style={{ marginTop: '15px', color: 'var(--text-secondary)' }}>Loading class details...</p>
-                </div>
-                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <div style={{ height: '32px', width: '80px', background: '#e5e7eb', borderRadius: '4px' }}></div>
-                </div>
-              </>
-            ) : selectedClass ? (
-              // Content State
-              <>
-                <div className="modal-header">
-                  <h3 className="modal-title" style={{ color: '#000000' }}>
-                    Class Details - {selectedClass.name}
-                  </h3>
-                  <button className="modal-close-btn" onClick={handleCloseViewModal}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-                
-                <div className="modal-body" style={{ maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                    <div>
-                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FontAwesomeIcon icon={faSchool} style={{ color: '#2563eb' }} />
-                        Class Information
-                      </h4>
-                      
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 30px' }}>
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Class Name
-                          </div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
-                            {selectedClass.name || 'N/A'}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Stream
-                          </div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
-                            {selectedClass.stream_name || 'N/A'}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Stage
-                          </div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
-                            {selectedClass.stream_stage || 'N/A'}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Capacity
-                          </div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
-                            {selectedClass.capacity || 'Unlimited'}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Homeroom Teacher
-                          </div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
-                            {selectedClass.teacher_name || 'Not Assigned'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Students Section */}
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <FontAwesomeIcon icon={faUsers} style={{ color: '#2563eb' }} />
-                          Students ({classStudents.length})
-                        </h4>
-                        <button
-                          onClick={handleOpenAddStudentModal}
-                          className="modal-btn modal-btn-confirm"
-                          style={{ padding: '4px 12px', fontSize: '0.75rem' }}
-                        >
-                          <FontAwesomeIcon icon={faPlus} style={{ marginRight: '4px' }} />
-                          Add Student
-                        </button>
-                      </div>
-
-                      {studentsLoading ? (
-                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                          Loading students...
-                        </div>
-                      ) : classStudents.length === 0 ? (
-                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                          No students enrolled in this class.
-                        </div>
-                      ) : (
-                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                            <thead style={{ 
-                              position: 'sticky', 
-                              top: 0, 
-                              zIndex: 10, 
-                              background: 'var(--sidebar-bg)' 
-                            }}>
-                              <tr>
-                                <th style={{ padding: '6px 10px' }}>STUDENT NAME</th>
-                                <th style={{ padding: '6px 10px' }}>REGISTRATION NUMBER</th>
-                                <th style={{ padding: '6px 10px' }}>ACTIONS</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {classStudents.map((enrollment, index) => (
-                                <tr 
-                                  key={enrollment.id} 
-                                  style={{ 
-                                    height: '32px', 
-                                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
-                                  }}
-                                >
-                                  <td style={{ padding: '4px 10px' }}>
-                                    {enrollment.Name} {enrollment.Surname}
-                                  </td>
-                                  <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>
-                                    {enrollment.RegNumber}
-                                  </td>
-                                  <td style={{ padding: '4px 10px' }}>
-                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                      <button
-                                        onClick={() => handleRemoveStudentClick(enrollment)}
-                                        style={{ 
-                                          color: '#dc2626', 
-                                          background: 'none', 
-                                          border: 'none', 
-                                          cursor: 'pointer', 
-                                          padding: 0
-                                        }}
-                                        title="De-enroll Student"
-                                      >
-                                        <FontAwesomeIcon icon={faTrash} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                              {/* Empty placeholder rows to always show 25 rows */}
-                              {Array.from({ length: Math.max(0, 25 - classStudents.length) }).map((_, index) => (
-                                <tr 
-                                  key={`empty-${index}`}
-                                  style={{ 
-                                    height: '32px', 
-                                    backgroundColor: (classStudents.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6' 
-                                  }}
-                                >
-                                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="modal-footer">
-                  <button className="modal-btn modal-btn-cancel" onClick={handleCloseViewModal}>
-                    Close
-                  </button>
-                </div>
-              </>
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {/* Add Student Modal */}
-      {showAddStudentModal && selectedClass && (
-        <div className="modal-overlay" onClick={handleCloseAddStudentModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '600px' }}
-          >
-            <div className="modal-header">
-              <h3 className="modal-title">Add Student to {selectedClass.name}</h3>
-              <button className="modal-close-btn" onClick={handleCloseAddStudentModal}>
-                <FontAwesomeIcon icon={faTimes} />
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              {addStudentError && (
-                <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
-                  {addStudentError}
-                </div>
-              )}
-
-              <div className="modal-form">
-                <div className="form-group">
-                  <label className="form-label">Search Student</label>
-                  <input
-                    type="text"
-                    value={studentSearchTerm}
-                    onChange={(e) => setStudentSearchTerm(e.target.value)}
-                    className="form-control"
-                    placeholder="Search by registration number, first name, or surname"
-                    style={{ width: '100%' }}
-                  />
-                  <p style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    Start typing to search (minimum 2 characters)
-                  </p>
-                </div>
-              </div>
-
-              {studentSearchResults.length > 0 && (
-                <div style={{ marginTop: '16px', maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
-                  <div style={{ padding: '8px 12px', background: '#f9fafb', borderBottom: '1px solid var(--border-color)', fontWeight: 600, fontSize: '0.75rem' }}>
-                    Search Results
-                  </div>
-                  {studentSearchResults.map((student) => (
-                    <div 
-                      key={student.RegNumber} 
-                      style={{ 
-                        padding: '12px', 
-                        borderBottom: '1px solid var(--border-color)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-primary)' }}>
-                          {student.Name} {student.Surname}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: '2px' }}>
-                          {student.RegNumber}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleAddStudentToClass(student)}
-                        className="modal-btn modal-btn-confirm"
-                        disabled={addStudentLoading === student.RegNumber}
-                        style={{ padding: '4px 12px', fontSize: '0.75rem' }}
-                      >
-                        {addStudentLoading === student.RegNumber ? 'Adding...' : 'Add'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {studentSearchResults.length === 0 && !studentSearchLoading && studentSearchTerm && (
-                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                  No students found. Try a different search term.
-                </div>
-              )}
-            </div>
-            
-            <div className="modal-footer">
-              <button className="modal-btn modal-btn-cancel" onClick={handleCloseAddStudentModal}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Edit Class Modal */}
       {showEditModal && (
         <div className="modal-overlay" onClick={handleCloseEditModal}>
@@ -2391,93 +1839,6 @@ const Classes = () => {
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Remove Student Confirmation Modal */}
-      {showRemoveStudentModal && enrollmentToRemove && (
-        <div className="modal-overlay" onClick={handleCloseRemoveStudentModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ maxWidth: '500px' }}
-          >
-            <div className="modal-header">
-              <h3 className="modal-title">Confirm De-enroll</h3>
-              <button className="modal-close-btn" onClick={handleCloseRemoveStudentModal}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-            </div>
-            
-            <div className="modal-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-                <div style={{ 
-                  width: '48px', 
-                  height: '48px', 
-                  borderRadius: '50%', 
-                  background: '#fee2e2', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                </div>
-                <div>
-                  <p style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                    Are you sure you want to de-enroll this student?
-                  </p>
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    This action will remove the student from the class.
-                  </p>
-                </div>
-              </div>
-              
-              <div style={{ 
-                padding: '12px', 
-                background: '#f9fafb', 
-                borderRadius: '4px',
-                border: '1px solid #e5e7eb'
-              }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Student Information
-                </div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                  <div style={{ marginBottom: '4px' }}>
-                    <strong>Name:</strong> {enrollmentToRemove.Name} {enrollmentToRemove.Surname}
-                  </div>
-                  <div>
-                    <strong>Registration Number:</strong> {enrollmentToRemove.RegNumber}
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="modal-footer">
-              <button 
-                className="modal-btn modal-btn-cancel" 
-                onClick={handleCloseRemoveStudentModal}
-                disabled={isRemovingStudent}
-              >
-                Cancel
-              </button>
-              <button 
-                className="modal-btn modal-btn-confirm" 
-                onClick={handleRemoveStudent}
-                disabled={isRemovingStudent}
-                style={{ background: '#dc2626' }}
-              >
-                {isRemovingStudent ? 'De-enrolling...' : 'De-enroll'}
-              </button>
-            </div>
           </div>
         </div>
       )}

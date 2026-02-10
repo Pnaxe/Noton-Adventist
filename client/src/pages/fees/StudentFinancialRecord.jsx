@@ -3,22 +3,30 @@ import StudentFinancialRecordComponent from './components/StudentFinancialRecord
 
 const StudentFinancialRecord = () => {
   return (
-    <div className="min-h-screen bg-gray-50 py-6">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-6">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">Student Financial Record</h1>
-            <p className="text-xs text-gray-600">View and manage student financial statements</p>
-          </div>
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Student Financial Record</h2>
+          <p className="report-subtitle">View and manage student financial statements.</p>
         </div>
-
-        <div className="grid grid-cols-1 gap-6">
-          {/* Financial Record Component - Full Width */}
-          <div>
-            <StudentFinancialRecordComponent />
-          </div>
-        </div>
+      </div>
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: '0 20px 20px',
+        height: '100%'
+      }}>
+        <StudentFinancialRecordComponent />
       </div>
     </div>
   );

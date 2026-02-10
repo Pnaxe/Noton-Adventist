@@ -222,24 +222,28 @@ const AccountsPayable = () => {
   };
 
   return (
-    <div className="p-2">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-bold text-gray-900 mb-2">Accounts Payable</h1>
-          <p className="text-sm text-gray-600">
-            Manage outstanding payments and track transaction history
-          </p>
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Accounts Payable</h2>
+          <p className="report-subtitle">Manage outstanding payments and track transaction history.</p>
         </div>
-        <button
-          onClick={() => setShowOpeningBalanceModal(true)}
-          className="bg-blue-600 text-white px-4 py-2 text-xs hover:bg-blue-700 flex items-center space-x-2"
-        >
-          <span>+ Add Opening Balance</span>
-        </button>
+        <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button onClick={() => setShowOpeningBalanceModal(true)} className="btn-checklist">
+            + Add Opening Balance
+          </button>
+        </div>
       </div>
       
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 px-4 lg:px-8">
         <div className="bg-white p-4 border border-gray-200">
           <div className="text-xs text-gray-600">Total Payables</div>
           <div className="text-lg font-semibold">{summary.total_payables || 0}</div>
@@ -261,7 +265,7 @@ const AccountsPayable = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white p-4 border border-gray-200 mb-6">
+      <div className="bg-white p-4 border border-gray-200 mb-6 mx-4 lg:mx-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs text-gray-600 mb-1">Search</label>
@@ -303,122 +307,121 @@ const AccountsPayable = () => {
       </div>
 
       {/* Table */}
-      <div className="mt-8 flex flex-col">
-        <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden border border-gray-200">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Payable To</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Description</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Original Amount</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Paid Amount</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Outstanding</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Status</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Due Date</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {loading ? (
-                    <tr>
-                      <td colSpan="8" className="px-3 py-4 text-center text-xs text-gray-500">
-                        Loading...
-                      </td>
-                    </tr>
-                  ) : payables.length === 0 ? (
-                    <tr>
-                      <td colSpan="8" className="px-3 py-4 text-center text-xs text-gray-500">
-                        No accounts payable found
-                      </td>
-                    </tr>
-                  ) : (
-                    payables.map((payable) => (
-                      <tr key={payable.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {payable.payable_to || 'Non-Supplier'}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {payable.expense_description}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {formatCurrency(payable.original_amount, payable.currency_code)}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {formatCurrency(payable.paid_amount, payable.currency_code)}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900 font-medium">
-                            {formatCurrency(payable.outstanding_balance, payable.currency_code)}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs rounded ${getStatusColor(payable.status)}`}>
-                            {payable.status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {payable.due_date || 'Not set'}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => handleViewTransactions(payable)}
-                              className="text-blue-600 hover:text-blue-900"
-                              title="View Transactions"
-                            >
-                              <FontAwesomeIcon icon={faEye} className="h-3 w-3" />
-                            </button>
-                            {payable.status !== 'paid' && (
-                              <button
-                                onClick={() => handleMakePayment(payable)}
-                                className="text-green-600 hover:text-green-900"
-                                title="Make Payment"
-                              >
-                                Pay
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: 0,
+        height: '100%'
+      }}>
+        {loading ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading accounts payable...</p>
           </div>
-        </div>
+        ) : (
+          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+            <thead style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'var(--sidebar-bg)'
+            }}>
+              <tr>
+                <th style={{ padding: '6px 10px' }}>PAYABLE TO</th>
+                <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+                <th style={{ padding: '6px 10px' }}>ORIGINAL</th>
+                <th style={{ padding: '6px 10px' }}>PAID</th>
+                <th style={{ padding: '6px 10px' }}>OUTSTANDING</th>
+                <th style={{ padding: '6px 10px' }}>STATUS</th>
+                <th style={{ padding: '6px 10px' }}>DUE DATE</th>
+                <th style={{ padding: '6px 10px', width: '110px' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payables.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ padding: '12px 10px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No accounts payable found.
+                  </td>
+                </tr>
+              ) : (
+                payables.map((payable, index) => (
+                  <tr
+                    key={payable.id}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>{payable.payable_to || 'Non-Supplier'}</td>
+                    <td style={{ padding: '4px 10px' }}>{payable.expense_description}</td>
+                    <td style={{ padding: '4px 10px' }}>{formatCurrency(payable.original_amount, payable.currency_code)}</td>
+                    <td style={{ padding: '4px 10px' }}>{formatCurrency(payable.paid_amount, payable.currency_code)}</td>
+                    <td style={{ padding: '4px 10px', fontWeight: 600 }}>{formatCurrency(payable.outstanding_balance, payable.currency_code)}</td>
+                    <td style={{ padding: '4px 10px' }}>
+                      <span className={`px-2 py-1 text-xs rounded ${getStatusColor(payable.status)}`}>
+                        {payable.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '4px 10px' }}>{payable.due_date || 'Not set'}</td>
+                    <td style={{ padding: '4px 10px', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <button
+                          onClick={() => handleViewTransactions(payable)}
+                          style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          title="View Transactions"
+                        >
+                          <FontAwesomeIcon icon={faEye} className="h-3 w-3" />
+                        </button>
+                        {payable.status !== 'paid' && (
+                          <button
+                            onClick={() => handleMakePayment(payable)}
+                            style={{ color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Make Payment"
+                          >
+                            Pay
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Pagination */}
       {total > pageSize && (
-        <div className="flex justify-between items-center mt-4">
-          <div className="text-xs text-gray-600">
+        <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+          <div className="table-footer-left">
             Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, total)} of {total} results
           </div>
-          <div className="flex space-x-2">
+          <div className="table-footer-right">
             <button
               onClick={() => setPage(page - 1)}
               disabled={page === 1}
-              className="px-3 py-1 text-xs text-gray-700 bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+              className="pagination-btn"
             >
               Previous
             </button>
             <button
               onClick={() => setPage(page + 1)}
               disabled={page * pageSize >= total}
-              className="px-3 py-1 text-xs text-gray-700 bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+              className="pagination-btn"
             >
               Next
             </button>

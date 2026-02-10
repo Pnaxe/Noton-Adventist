@@ -209,29 +209,42 @@ const ViewCOA = () => {
   };
 
   return (
-    <div className="px-2 md:px-4 lg:px-8 w-full max-w-full">
-      {loading ? (
-        <div className="p-3 md:p-6 text-xs text-gray-500">Loading account...</div>
-      ) : error ? (
-        <div className="p-3 md:p-6 text-xs text-red-600">{error}</div>
-      ) : !account ? (
-        <div className="p-3 md:p-6 text-xs text-gray-500">Account not found.</div>
-      ) : (
-        <>
-          {/* Account Info Header */}
-          <div className="mb-4 md:mb-8 border-b border-gray-200 pb-3 md:pb-4">
-            <div className="flex flex-col md:flex-row md:items-center md:space-x-6">
-              <div className="flex-1">
-                <div className="text-base md:text-lg font-bold text-gray-900 mb-1">
-                  {account.code} &mdash; {account.name}
-                </div>
-                <div className="text-xs text-gray-500 mb-1">{account.type}</div>
-                <div className="text-xs text-gray-500">
-                  {account.parent_id && parent ? `Parent: ${parent.code} - ${parent.name}` : ''}
-                </div>
-              </div>
-            </div>
-          </div>
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">
+            {account ? `${account.code} — ${account.name}` : 'Chart of Accounts'}
+          </h2>
+          <p className="report-subtitle">
+            {account ? `${account.type}${account.parent_id && parent ? ` • Parent: ${parent.code} - ${parent.name}` : ''}` : 'Account details and ledger activity.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: '0 20px 20px',
+        height: '100%'
+      }}>
+        {loading ? (
+          <div className="p-3 md:p-6 text-xs text-gray-500">Loading account...</div>
+        ) : error ? (
+          <div className="p-3 md:p-6 text-xs text-red-600">{error}</div>
+        ) : !account ? (
+          <div className="p-3 md:p-6 text-xs text-gray-500">Account not found.</div>
+        ) : (
+          <>
 
           {/* Balances Table */}
           <div className="mb-4 md:mb-8">
@@ -241,29 +254,35 @@ const ViewCOA = () => {
                 <div className="p-3 md:p-4 text-xs text-gray-500">Loading balances...</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full divide-y divide-gray-200 text-xs" style={{ minWidth: '400px' }}>
-                    <thead className="bg-gray-100">
+                  <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%', minWidth: '400px' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--sidebar-bg)' }}>
                       <tr>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider">Currency</th>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider hidden sm:table-cell">Symbol</th>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider">Balance</th>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider hidden md:table-cell">As of Date</th>
+                        <th style={{ padding: '6px 10px' }}>CURRENCY</th>
+                        <th style={{ padding: '6px 10px' }} className="hidden sm:table-cell">SYMBOL</th>
+                        <th style={{ padding: '6px 10px' }}>BALANCE</th>
+                        <th style={{ padding: '6px 10px' }} className="hidden md:table-cell">AS OF</th>
                       </tr>
                     </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {balances.map((b, idx) => (
-                      <tr key={b.currency.id}>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap">
+                    <tbody>
+                      {balances.map((b, idx) => (
+                        <tr
+                          key={b.currency.id}
+                          style={{
+                            height: '32px',
+                            backgroundColor: idx % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                          }}
+                        >
+                          <td style={{ padding: '4px 10px' }}>
                             <div className="text-xs font-medium text-gray-900">{b.currency.code} - {b.currency.name}</div>
                             <div className="text-xs text-gray-500 sm:hidden">{b.currency.symbol || '-'}</div>
                           </td>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap hidden sm:table-cell">{b.currency.symbol || '-'}</td>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap">
+                          <td style={{ padding: '4px 10px' }} className="hidden sm:table-cell">{b.currency.symbol || '-'}</td>
+                          <td style={{ padding: '4px 10px' }}>
                             <span className={`text-xs font-medium ${b.balance < 0 ? 'text-green-600' : b.balance > 0 ? 'text-red-600' : ''}`}>
                               {b.balance === 0 ? '0.00' : `${formatCurrency(Math.abs(b.balance), b.currency.symbol)} ${b.balance < 0 ? 'CR' : 'DR'}`}
                             </span>
                           </td>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap hidden md:table-cell">{b.as_of_date ? b.as_of_date.slice(0, 10) : '-'}</td>
+                          <td style={{ padding: '4px 10px' }} className="hidden md:table-cell">{b.as_of_date ? b.as_of_date.slice(0, 10) : '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -332,23 +351,23 @@ const ViewCOA = () => {
                 <div className="p-3 md:p-4 text-xs text-gray-500">Loading ledger entries...</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full divide-y divide-gray-200 text-xs" style={{ minWidth: '500px' }}>
-                    <thead className="bg-gray-100">
+                  <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%', minWidth: '500px' }}>
+                    <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--sidebar-bg)' }}>
                       <tr>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider">Date</th>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider">Description</th>
-                        <th className="px-2 md:px-3 py-2 text-right font-medium tracking-wider">DR</th>
-                        <th className="px-2 md:px-3 py-2 text-right font-medium tracking-wider">CR</th>
-                        <th className="px-2 md:px-3 py-2 text-left font-medium tracking-wider">Reference</th>
+                        <th style={{ padding: '6px 10px' }}>DATE</th>
+                        <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+                        <th style={{ padding: '6px 10px', textAlign: 'right' }}>DR</th>
+                        <th style={{ padding: '6px 10px', textAlign: 'right' }}>CR</th>
+                        <th style={{ padding: '6px 10px' }}>REFERENCE</th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody>
                       {ledgerEntries.map((entry) => (
-                        <tr key={`${entry.source}-${entry.id}`} className="hover:bg-gray-50">
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap text-gray-900">
+                        <tr key={`${entry.source}-${entry.id}`} style={{ height: '32px' }}>
+                          <td style={{ padding: '4px 10px' }}>
                             {formatDate(entry.transaction_date)}
                           </td>
-                          <td className="px-2 md:px-3 py-2 text-gray-900">
+                          <td style={{ padding: '4px 10px' }}>
                             <div className="flex items-center">
                               <FontAwesomeIcon 
                                 icon={getSourceIcon(entry.source)} 
@@ -359,13 +378,13 @@ const ViewCOA = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap text-right font-medium text-red-600">
+                          <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
                             {entry.debit_amount > 0 ? formatCurrency(entry.debit_amount) : '-'}
                           </td>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap text-right font-medium text-green-600">
+                          <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>
                             {entry.credit_amount > 0 ? formatCurrency(entry.credit_amount) : '-'}
                           </td>
-                          <td className="px-2 md:px-3 py-2 whitespace-nowrap text-gray-500">
+                          <td style={{ padding: '4px 10px', color: '#64748b' }}>
                             {entry.reference || entry.receipt_number || entry.reference_number || '-'}
                           </td>
                       </tr>
@@ -417,6 +436,7 @@ const ViewCOA = () => {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 };

@@ -2,8 +2,17 @@ const { pool } = require('../../config/database');
 const AuditLogger = require('../../utils/audit');
 const StudentTransactionController = require('../students/studentTransactionController');
 const AccountBalanceService = require('../../services/accountBalanceService');
+const StudentBalanceService = require('../../services/studentBalanceService');
 
 class FeePaymentController {
+	// Ensure only sysadmin can perform destructive edits
+	static ensureSysadmin(req, res) {
+		if (!req.user || req.user.username !== 'sysadmin') {
+			res.status(403).json({ success: false, message: 'Only sysadmin can perform this action' });
+			return false;
+		}
+		return true;
+	}
 	// Process fee payment
 	async processPayment(req, res) {
 		const conn = await pool.getConnection();
@@ -16,6 +25,7 @@ class FeePaymentController {
 				payment_currency,
 				exchange_rate = 1.0,
 				payment_method,
+				payment_account_id,
 				payment_date,
 				reference_number,
 				notes
@@ -117,6 +127,7 @@ class FeePaymentController {
 				exchange_rate,
 				base_currency_amount,
 				payment_method: normalizedPaymentMethod,
+				payment_account_id,
 				payment_date: payment_date || new Date(),
 				receipt_number,
 				reference_number,
@@ -193,6 +204,246 @@ class FeePaymentController {
 				message: 'Failed to process payment',
 				error: error.message
 			});
+		} finally {
+			conn.release();
+		}
+	}
+
+	// Update fee payment (sysadmin only, requires reason)
+	async updatePayment(req, res) {
+		const conn = await pool.getConnection();
+		try {
+			if (!FeePaymentController.ensureSysadmin(req, res)) {
+				return;
+			}
+
+			const { id } = req.params;
+			const {
+				payment_amount,
+				payment_currency,
+				exchange_rate = 1.0,
+				payment_method,
+				payment_date,
+				reference_number,
+				notes,
+				payment_account_id,
+				reason
+			} = req.body;
+
+			if (!reason || !String(reason).trim()) {
+				return res.status(400).json({ success: false, message: 'Reason is required' });
+			}
+
+			if (!payment_amount || !payment_currency || !payment_method || !payment_date || !reference_number) {
+				return res.status(400).json({
+					success: false,
+					message: 'Amount, currency, payment method, payment date, and reference number are required'
+				});
+			}
+
+			await conn.beginTransaction();
+
+			const [payments] = await conn.execute(
+				'SELECT * FROM fee_payments WHERE id = ?',
+				[id]
+			);
+			if (payments.length === 0) {
+				await conn.rollback();
+				return res.status(404).json({ success: false, message: 'Payment not found' });
+			}
+
+			const existingPayment = payments[0];
+			const studentReg = existingPayment.student_reg_number;
+			const receiptNumber = existingPayment.receipt_number;
+			const journalEntryId = existingPayment.journal_entry_id;
+
+			// Delete original records (fee payment, linked transactions, journal)
+			if (journalEntryId) {
+				await conn.execute('DELETE FROM journal_entry_lines WHERE journal_entry_id = ?', [journalEntryId]);
+				await conn.execute('DELETE FROM journal_entries WHERE id = ?', [journalEntryId]);
+				await conn.execute('DELETE FROM student_transactions WHERE journal_entry_id = ?', [journalEntryId]);
+			}
+
+			if (receiptNumber) {
+				await conn.execute(
+					`DELETE FROM student_transactions 
+					 WHERE student_reg_number = ? 
+					 AND transaction_type = 'CREDIT' 
+					 AND description LIKE ?`,
+					[studentReg, `%Receipt #${receiptNumber}%`]
+				);
+			}
+
+			await conn.execute('DELETE FROM fee_payments WHERE id = ?', [id]);
+
+			// Recompute student balance after deletion
+			await StudentBalanceService.recalculateBalance(studentReg, conn);
+
+			// Create new payment record (corrected)
+			const base_currency_amount = parseFloat(payment_amount) * parseFloat(exchange_rate || 1);
+			const receipt_number = reference_number;
+
+			const [insertResult] = await conn.execute(
+				`INSERT INTO fee_payments 
+				 (student_reg_number, payment_amount, payment_currency, exchange_rate, 
+				  base_currency_amount, payment_method, payment_date, receipt_number, 
+				  reference_number, notes, created_by) 
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				[
+					studentReg,
+					payment_amount,
+					payment_currency,
+					exchange_rate || 1,
+					base_currency_amount,
+					payment_method,
+					payment_date,
+					receipt_number,
+					reference_number,
+					notes || null,
+					req.user.id
+				]
+			);
+
+			const newPaymentId = insertResult.insertId;
+
+			// Create CREDIT transaction
+			const transactionId = await StudentTransactionController.createTransactionHelper(
+				studentReg,
+				'CREDIT',
+				base_currency_amount,
+				`Fee Payment - Receipt #${receipt_number}`,
+				{
+					created_by: req.user.id,
+					conn
+				}
+			);
+
+			// Create journal entries
+			const journalEntryData = {
+				student_reg_number: studentReg,
+				payment_amount,
+				payment_currency,
+				exchange_rate,
+				base_currency_amount,
+				payment_method,
+				payment_account_id,
+				payment_date,
+				receipt_number,
+				reference_number,
+				notes,
+				created_by: req.user.id
+			};
+
+			const newJournalEntryId = await FeePaymentController.createJournalEntries(conn, journalEntryData);
+
+			// Link journal entry to payment + student transaction
+			await conn.execute(
+				'UPDATE fee_payments SET journal_entry_id = ? WHERE id = ?',
+				[newJournalEntryId, newPaymentId]
+			);
+			await conn.execute(
+				'UPDATE student_transactions SET journal_entry_id = ? WHERE id = ?',
+				[newJournalEntryId, transactionId]
+			);
+
+			// Recompute balances after new payment
+			await StudentBalanceService.recalculateBalance(studentReg, conn);
+			await AccountBalanceService.recalculateAllAccountBalances(conn);
+
+			// Audit
+			await AuditLogger.log({
+				userId: req.user.id,
+				action: 'UPDATE',
+				tableName: 'fee_payments',
+				recordId: newPaymentId,
+				oldValues: { id, receipt_number: receiptNumber },
+				newValues: { id: newPaymentId, receipt_number, reason }
+			});
+
+			await conn.commit();
+
+			res.json({
+				success: true,
+				message: 'Payment updated successfully',
+				data: { id: newPaymentId, receipt_number }
+			});
+		} catch (error) {
+			await conn.rollback();
+			console.error('Error updating payment:', error);
+			res.status(500).json({ success: false, message: 'Failed to update payment' });
+		} finally {
+			conn.release();
+		}
+	}
+
+	// Delete fee payment (sysadmin only, requires reason)
+	async deletePayment(req, res) {
+		const conn = await pool.getConnection();
+		try {
+			if (!FeePaymentController.ensureSysadmin(req, res)) {
+				return;
+			}
+
+			const { id } = req.params;
+			const { reason } = req.body;
+
+			if (!reason || !String(reason).trim()) {
+				return res.status(400).json({ success: false, message: 'Reason is required' });
+			}
+
+			await conn.beginTransaction();
+
+			const [payments] = await conn.execute(
+				'SELECT * FROM fee_payments WHERE id = ?',
+				[id]
+			);
+			if (payments.length === 0) {
+				await conn.rollback();
+				return res.status(404).json({ success: false, message: 'Payment not found' });
+			}
+
+			const payment = payments[0];
+			const studentReg = payment.student_reg_number;
+			const receiptNumber = payment.receipt_number;
+			const journalEntryId = payment.journal_entry_id;
+
+			if (journalEntryId) {
+				await conn.execute('DELETE FROM journal_entry_lines WHERE journal_entry_id = ?', [journalEntryId]);
+				await conn.execute('DELETE FROM journal_entries WHERE id = ?', [journalEntryId]);
+				await conn.execute('DELETE FROM student_transactions WHERE journal_entry_id = ?', [journalEntryId]);
+			}
+
+			if (receiptNumber) {
+				await conn.execute(
+					`DELETE FROM student_transactions 
+					 WHERE student_reg_number = ? 
+					 AND transaction_type = 'CREDIT' 
+					 AND description LIKE ?`,
+					[studentReg, `%Receipt #${receiptNumber}%`]
+				);
+			}
+
+			await conn.execute('DELETE FROM fee_payments WHERE id = ?', [id]);
+
+			await StudentBalanceService.recalculateBalance(studentReg, conn);
+			await AccountBalanceService.recalculateAllAccountBalances(conn);
+
+			await AuditLogger.log({
+				userId: req.user.id,
+				action: 'DELETE',
+				tableName: 'fee_payments',
+				recordId: id,
+				oldValues: { id, receipt_number: receiptNumber },
+				newValues: { reason }
+			});
+
+			await conn.commit();
+
+			res.json({ success: true, message: 'Payment deleted successfully' });
+		} catch (error) {
+			await conn.rollback();
+			console.error('Error deleting payment:', error);
+			res.status(500).json({ success: false, message: 'Failed to delete payment' });
 		} finally {
 			conn.release();
 		}
@@ -569,17 +820,29 @@ class FeePaymentController {
 
 			const student_name = `${students[0].Name} ${students[0].Surname}`;
 
-			// Get Cash account (usually account 83 - Cash on Hand)
-			const [cashAccounts] = await conn.execute(
-				'SELECT id FROM chart_of_accounts WHERE code = ? AND type = ? LIMIT 1',
-				['1000', 'Asset']
-			);
+			let paymentAccountId = paymentData.payment_account_id ? parseInt(paymentData.payment_account_id, 10) : null;
 
-			if (cashAccounts.length === 0) {
-				throw new Error('Cash account not found in chart of accounts');
+			if (paymentAccountId) {
+				const [paymentAccounts] = await conn.execute(
+					'SELECT id FROM chart_of_accounts WHERE id = ? AND type = ? LIMIT 1',
+					[paymentAccountId, 'Asset']
+				);
+				if (paymentAccounts.length === 0) {
+					throw new Error('Selected payment account not found in chart of accounts');
+				}
+				paymentAccountId = paymentAccounts[0].id;
+			} else {
+				const isBank = (paymentData.payment_method || '').toString().toLowerCase().includes('bank');
+				const accountCode = isBank ? '1010' : '1000';
+				const [paymentAccounts] = await conn.execute(
+					'SELECT id FROM chart_of_accounts WHERE code = ? AND type = ? LIMIT 1',
+					[accountCode, 'Asset']
+				);
+				if (paymentAccounts.length === 0) {
+					throw new Error(`${isBank ? 'Bank' : 'Cash'} account not found in chart of accounts`);
+				}
+				paymentAccountId = paymentAccounts[0].id;
 			}
-
-			const cashAccountId = cashAccounts[0].id;
 
 			// Get Tuition Fees Revenue account
 			const [revenueAccounts] = await conn.execute(
@@ -653,7 +916,7 @@ class FeePaymentController {
 				// Debit: Cash/Bank (in payment currency)
 				{
 					journal_entry_id: journalEntryId,
-					account_id: cashAccountId,
+					account_id: paymentAccountId,
 					debit_amount: paymentData.base_currency_amount,
 					credit_amount: 0,
 					description: `Payment received for tuition fees - ${student_name} (${paymentData.student_reg_number})`

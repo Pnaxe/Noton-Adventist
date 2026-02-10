@@ -83,48 +83,119 @@ const Suppliers = () => {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-base font-semibold text-gray-800">Suppliers</h1>
-        <button className="px-3 py-1 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800" style={{ borderRadius: 0 }} onClick={openAddModal}>+ Add Supplier</button>
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
+    }}>
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Suppliers</h2>
+          <p className="report-subtitle">Manage supplier contacts and details.</p>
+        </div>
+        <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button onClick={openAddModal} className="btn-checklist">+ Add Supplier</button>
+        </div>
       </div>
-      <div className="border-t border-gray-200">
+
+      {error && (
+        <div style={{ padding: '10px 30px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', flexShrink: 0 }}>
+          {error}
+        </div>
+      )}
+
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: 0,
+        height: '100%'
+      }}>
         {loading ? (
-          <div className="text-xs text-gray-500 p-4">Loading suppliers...</div>
-        ) : error ? (
-          <div className="text-xs text-red-600 p-4">{error}</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 text-xs">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Name</th>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Contact Person</th>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Phone</th>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Email</th>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Address</th>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Status</th>
-                  <th className="px-3 py-2 text-left font-medium tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {suppliers.map((s) => (
-                  <tr key={s.id}>
-                    <td className="px-3 py-2 whitespace-nowrap">{s.name}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{s.contact_person}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{s.phone}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{s.email}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{s.address}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{s.is_active ? 'Active' : 'Inactive'}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <button className="text-gray-700 hover:text-gray-900 text-xs mr-2" style={{ borderRadius: 0 }} onClick={() => openEditModal(s)}>Edit</button>
-                      <button className="text-red-600 hover:text-red-800 text-xs" style={{ borderRadius: 0 }} onClick={() => handleDelete(s.id)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading suppliers...</p>
           </div>
+        ) : (
+          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+            <thead style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'var(--sidebar-bg)'
+            }}>
+              <tr>
+                <th style={{ padding: '6px 10px' }}>NAME</th>
+                <th style={{ padding: '6px 10px' }}>CONTACT</th>
+                <th style={{ padding: '6px 10px' }}>PHONE</th>
+                <th style={{ padding: '6px 10px' }}>EMAIL</th>
+                <th style={{ padding: '6px 10px' }}>ADDRESS</th>
+                <th style={{ padding: '6px 10px' }}>STATUS</th>
+                <th style={{ padding: '6px 10px', width: '110px' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suppliers.map((s, index) => (
+                <tr
+                  key={s.id}
+                  style={{
+                    height: '32px',
+                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                  }}
+                >
+                  <td style={{ padding: '4px 10px' }}>{s.name || '-'}</td>
+                  <td style={{ padding: '4px 10px' }}>{s.contact_person || '-'}</td>
+                  <td style={{ padding: '4px 10px' }}>{s.phone || '-'}</td>
+                  <td style={{ padding: '4px 10px' }}>{s.email || '-'}</td>
+                  <td style={{ padding: '4px 10px' }}>{s.address || '-'}</td>
+                  <td style={{ padding: '4px 10px' }}>
+                    <span style={{ color: s.is_active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+                      {s.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '4px 10px', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <button
+                        className="text-gray-700 hover:text-gray-900 text-xs"
+                        style={{ borderRadius: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onClick={() => openEditModal(s)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="text-red-600 hover:text-red-800 text-xs"
+                        style={{ borderRadius: 0, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onClick={() => handleDelete(s.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {suppliers.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ padding: '12px 10px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No suppliers found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         )}
       </div>
       {/* Modal for Add/Edit Supplier */}

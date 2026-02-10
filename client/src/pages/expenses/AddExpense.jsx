@@ -16,6 +16,7 @@ const AddExpense = () => {
     payment_method: 'cash', 
     payment_status: 'full', 
     expense_account_id: '',
+    payment_account_id: '',
     amount_paid: '',
     reference_number: ''
   });
@@ -24,6 +25,7 @@ const AddExpense = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [expenseAccounts, setExpenseAccounts] = useState([]);
+  const [chartAccounts, setChartAccounts] = useState([]);
 
   const fetchSuppliers = async () => {
     try {
@@ -43,6 +45,7 @@ const AddExpense = () => {
     try {
       const res = await axios.get(`${BASE_URL}/accounting/chart-of-accounts`, { headers: { Authorization: `Bearer ${token}` } });
       const accounts = res.data.data || [];
+      setChartAccounts(accounts);
       setExpenseAccounts(accounts.filter(acc => acc.type === 'Expense'));
     } catch {}
   };
@@ -61,6 +64,21 @@ const AddExpense = () => {
         setForm(prev => ({ ...prev, amount_paid: value }));
       }
     }
+  };
+
+  const getPaymentAccountOptions = (method) => {
+    if (!method || chartAccounts.length === 0) return [];
+    const isCash = method === 'cash';
+    const preferredCode = isCash ? '1000' : '1010';
+    const parentByCode = chartAccounts.find(acc => acc.code === preferredCode);
+    const parentByName = chartAccounts.find(acc => {
+      const name = (acc.name || '').toLowerCase();
+      return isCash ? name.includes('cash') : name.includes('bank');
+    });
+    const parent = parentByCode || parentByName;
+    if (!parent) return [];
+    const children = chartAccounts.filter(acc => acc.parent_id === parent.id);
+    return children.length > 0 ? children : [parent];
   };
 
   const generateReferenceNumber = () => {
@@ -86,6 +104,11 @@ const AddExpense = () => {
         setFormLoading(false);
         return;
       }
+      if (['cash', 'bank'].includes(form.payment_method) && !form.payment_account_id) {
+        setFormError('Please select a payment account.');
+        setFormLoading(false);
+        return;
+      }
 
       // Validate partial payment
       if (form.payment_status === 'partial') {
@@ -107,6 +130,7 @@ const AddExpense = () => {
         amount: parseFloat(form.amount),
         amount_paid: form.payment_status === 'partial' ? parseFloat(form.amount_paid) : null,
         expense_account_id: form.expense_account_id,
+        payment_account_id: form.payment_account_id || null,
         reference_number: form.reference_number
       }, { headers: { Authorization: `Bearer ${token}` } });
       navigate('/dashboard/expenses/expenses');
@@ -162,14 +186,37 @@ const AddExpense = () => {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Payment Method</label>
-            <select name="payment_method" value={form.payment_method} onChange={handleFormChange} className="w-full border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500" required>
-              <option value="Cash">Cash</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
-              <option value="Mobile Money">Mobile Money</option>
-              <option value="Other">Other</option>
+            <select
+              name="payment_method"
+              value={form.payment_method}
+              onChange={(e) => {
+                handleFormChange(e);
+                setForm(prev => ({ ...prev, payment_account_id: '' }));
+              }}
+              className="w-full border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+              required
+            >
+              <option value="cash">Cash</option>
+              <option value="bank">Bank</option>
             </select>
           </div>
+          {['cash', 'bank'].includes(form.payment_method) && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Payment Account</label>
+              <select
+                name="payment_account_id"
+                value={form.payment_account_id}
+                onChange={handleFormChange}
+                className="w-full border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+                required
+              >
+                <option value="">-- Select --</option>
+                {getPaymentAccountOptions(form.payment_method).map((acc) => (
+                  <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Payment Status</label>
             <select name="payment_status" value={form.payment_status} onChange={handleFormChange} className="w-full border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500" required>

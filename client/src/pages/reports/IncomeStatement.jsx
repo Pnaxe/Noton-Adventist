@@ -687,10 +687,8 @@ const IncomeStatement = () => {
         display: 'flex',
         flexDirection: 'column',
         flex: 1,
-        overflow: 'auto',
-        minHeight: 0,
-        padding: '20px 30px',
-        height: '100%'
+        overflow: 'visible',
+        padding: '20px 30px'
       }}>
         {/* Loading State */}
         {loading && !incomeStatementData && (
@@ -1257,50 +1255,116 @@ const IncomeStatement = () => {
                   </tr>
                   {/* Revenue Items */}
                   {incomeStatementData.revenue && incomeStatementData.revenue.length > 0 ? (
-                    incomeStatementData.revenue.map((item, index) => (
-                      <tr
-                        key={index}
-                        style={{
-                          backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb',
-                          height: '40px',
-                          transition: 'background-color 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0fdf4'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f9fafb'}
-                      >
-                        <td style={{ padding: '10px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center' }}>
-                            <span style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.8rem' }}>
-                              {item.account_name}
-                            </span>
-                            <span style={{
-                              color: 'var(--text-secondary)',
-                              marginLeft: '10px',
-                              fontSize: '0.7rem',
-                              background: '#f3f4f6',
-                              padding: '2px 6px',
-                              borderRadius: '4px'
+                    (() => {
+                      const tuitionItems = incomeStatementData.revenue.filter(item => (item.account_code || '').startsWith('TUITION-'));
+                      const boardingItems = incomeStatementData.revenue.filter(item => (item.account_code || '').startsWith('BOARDING-'));
+                      const otherItems = incomeStatementData.revenue.filter(item => !String(item.account_code || '').startsWith('TUITION-') && !String(item.account_code || '').startsWith('BOARDING-'));
+                      const tuitionTotal = tuitionItems.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                      const boardingTotal = boardingItems.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+                      const otherTotal = otherItems.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+
+                      const renderRevenueRows = (items, color, hoverColor) => (
+                        items.map((item, index) => (
+                          <tr
+                            key={`${item.account_code}-${index}`}
+                            style={{
+                              backgroundColor: index % 2 === 0 ? '#ffffff' : '#f9fafb',
+                              height: '40px',
+                              transition: 'background-color 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = hoverColor}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f9fafb'}
+                          >
+                            <td style={{ padding: '10px 20px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center' }}>
+                                <span style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '0.8rem' }}>
+                                  {item.account_name}
+                                </span>
+                                <span style={{
+                                  color: 'var(--text-secondary)',
+                                  marginLeft: '10px',
+                                  fontSize: '0.7rem',
+                                  background: '#f3f4f6',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px'
+                                }}>
+                                  {item.account_code}
+                                </span>
+                              </div>
+                            </td>
+                            <td style={{
+                              padding: '10px 20px',
+                              textAlign: 'right',
+                              fontWeight: 600,
+                              color,
+                              fontSize: '0.8rem',
+                              fontFamily: 'monospace'
                             }}>
-                              {item.account_code}
-                            </span>
-                          </div>
-                        </td>
-                        <td style={{
-                          padding: '10px 20px',
-                          textAlign: 'right',
-                          fontWeight: 600,
-                          color: '#059669',
-                          fontSize: '0.8rem',
-                          fontFamily: 'monospace'
-                        }}>
-                          {formatCurrency(item.amount)}
-                        </td>
-                      </tr>
-                    ))
+                              {formatCurrency(item.amount)}
+                            </td>
+                          </tr>
+                        ))
+                      );
+
+                      return (
+                        <>
+                          {tuitionItems.length > 0 && (
+                            <>
+                              <tr style={{ background: '#ecfdf5' }}>
+                                <td colSpan="2" style={{ padding: '10px 20px', fontWeight: 700, color: '#047857', fontSize: '0.8rem' }}>
+                                  Tuition Revenue (By Class)
+                                </td>
+                              </tr>
+                              {renderRevenueRows(tuitionItems, '#059669', '#f0fdf4')}
+                              <tr style={{ background: '#d1fae5', borderTop: '1px solid #a7f3d0' }}>
+                                <td style={{ padding: '10px 20px', fontWeight: 700, color: '#047857' }}>Tuition Subtotal</td>
+                                <td style={{ padding: '10px 20px', textAlign: 'right', fontWeight: 700, color: '#047857', fontFamily: 'monospace' }}>
+                                  {formatCurrency(tuitionTotal)}
+                                </td>
+                              </tr>
+                            </>
+                          )}
+
+                          {boardingItems.length > 0 && (
+                            <>
+                              <tr style={{ background: '#eef2ff' }}>
+                                <td colSpan="2" style={{ padding: '10px 20px', fontWeight: 700, color: '#4338ca', fontSize: '0.8rem' }}>
+                                  Boarding Revenue (By Hostel)
+                                </td>
+                              </tr>
+                              {renderRevenueRows(boardingItems, '#4338ca', '#eef2ff')}
+                              <tr style={{ background: '#e0e7ff', borderTop: '1px solid #c7d2fe' }}>
+                                <td style={{ padding: '10px 20px', fontWeight: 700, color: '#4338ca' }}>Boarding Subtotal</td>
+                                <td style={{ padding: '10px 20px', textAlign: 'right', fontWeight: 700, color: '#4338ca', fontFamily: 'monospace' }}>
+                                  {formatCurrency(boardingTotal)}
+                                </td>
+                              </tr>
+                            </>
+                          )}
+
+                          {otherItems.length > 0 && (
+                            <>
+                              <tr style={{ background: '#f8fafc' }}>
+                                <td colSpan="2" style={{ padding: '10px 20px', fontWeight: 700, color: '#0f172a', fontSize: '0.8rem' }}>
+                                  Other Revenue
+                                </td>
+                              </tr>
+                              {renderRevenueRows(otherItems, '#059669', '#f0fdf4')}
+                              <tr style={{ background: '#e2e8f0', borderTop: '1px solid #cbd5f5' }}>
+                                <td style={{ padding: '10px 20px', fontWeight: 700, color: '#0f172a' }}>Other Revenue Subtotal</td>
+                                <td style={{ padding: '10px 20px', textAlign: 'right', fontWeight: 700, color: '#0f172a', fontFamily: 'monospace' }}>
+                                  {formatCurrency(otherTotal)}
+                                </td>
+                              </tr>
+                            </>
+                          )}
+                        </>
+                      );
+                    })()
                   ) : (
                     <tr>
                       <td colSpan="2" style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                        No revenue accounts configured
+                        No revenue found for the selected period
                       </td>
                     </tr>
                   )}
@@ -1387,7 +1451,7 @@ const IncomeStatement = () => {
                   ) : (
                     <tr>
                       <td colSpan="2" style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                        No expense accounts configured
+                        No expenses found for the selected period
                       </td>
                     </tr>
                   )}

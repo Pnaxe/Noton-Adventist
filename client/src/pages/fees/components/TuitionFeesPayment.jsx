@@ -11,6 +11,8 @@ import {
   faTimes,
   faPlus,
   faEye,
+  faEdit,
+  faTrash,
   faFileInvoiceDollar
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -19,9 +21,38 @@ import axios from 'axios';
 import SuccessModal from '../../../components/SuccessModal';
 import ErrorModal from '../../../components/ErrorModal';
 import { jsPDF } from 'jspdf';
+import logo from '../../../assets/norton_logo.png';
+
+const formatDate = (value) => {
+  if (!value) return 'N/A';
+  try {
+    return new Date(value).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  } catch {
+    return value;
+  }
+};
+
+const formatDateTime = (value) => {
+  if (!value) return 'N/A';
+  try {
+    return new Date(value).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return value;
+  }
+};
 
 const TuitionFeesPayment = forwardRef((props, ref) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,10 +77,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
   const [currencies, setCurrencies] = useState([]);
   const [paymentMethods] = useState([
     { id: 'cash', name: 'Cash' },
-    { id: 'bank_transfer', name: 'Bank Transfer' },
-    { id: 'cheque', name: 'Cheque' },
-    { id: 'mobile_money', name: 'Mobile Money' },
-    { id: 'other', name: 'Other' }
+    { id: 'bank_transfer', name: 'Bank Transfer' }
   ]);
   const [invoiceStructures, setInvoiceStructures] = useState([]);
   const [selectedStructure, setSelectedStructure] = useState(null);
@@ -57,11 +85,28 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
   const [showReceipt, setShowReceipt] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [chartAccounts, setChartAccounts] = useState([]);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountError, setAccountError] = useState('');
   
   // View modal states
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [viewModalLoading, setViewModalLoading] = useState(false);
+  const [showEditPaymentModal, setShowEditPaymentModal] = useState(false);
+  const [editPaymentLoading, setEditPaymentLoading] = useState(false);
+  const [editReason, setEditReason] = useState('');
+  const [showDeletePaymentModal, setShowDeletePaymentModal] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [editFormData, setEditFormData] = useState({
+    payment_amount: '',
+    payment_currency: '',
+    payment_method_id: '',
+    payment_account_id: '',
+    payment_date: '',
+    reference_number: '',
+    notes: ''
+  });
 
   // Form states - Tuition
   const [tuitionFormData, setTuitionFormData] = useState({
@@ -73,6 +118,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     amount: '',
     currency_id: '',
     payment_method_id: '',
+    payment_account_id: '',
     payment_date: new Date().toISOString().split('T')[0],
     reference_number: '',
     notes: ''
@@ -114,6 +160,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     if (showPaymentModal) {
       fetchClasses();
       fetchCurrencies();
+      fetchChartAccounts();
     }
   }, [showPaymentModal, paymentType]);
 
@@ -128,6 +175,27 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     }
   }, [tuitionFormData.gradelevel_class_id, tuitionFormData.term, tuitionFormData.academic_year]);
 
+  useEffect(() => {
+    if (paymentType !== 'tuition') {
+      return;
+    }
+    if (!tuitionFormData.payment_method_id) {
+      setTuitionFormData(prev => ({ ...prev, payment_account_id: '' }));
+      return;
+    }
+    const options = getAccountOptions(tuitionFormData.payment_method_id);
+    if (options.length === 1) {
+      setTuitionFormData(prev => ({ ...prev, payment_account_id: String(options[0].id) }));
+      return;
+    }
+    if (options.length > 1) {
+      const exists = options.some(opt => String(opt.id) === String(tuitionFormData.payment_account_id));
+      if (!exists) {
+        setTuitionFormData(prev => ({ ...prev, payment_account_id: '' }));
+      }
+    }
+  }, [paymentType, tuitionFormData.payment_method_id, chartAccounts]);
+
   const handleOpenPaymentModal = () => {
     setShowPaymentModal(true);
     setPaymentType('tuition');
@@ -140,6 +208,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       amount: '',
       currency_id: '',
       payment_method_id: '',
+      payment_account_id: '',
       payment_date: new Date().toISOString().split('T')[0],
       reference_number: '',
       notes: ''
@@ -158,6 +227,103 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     setSelectedStructure(null);
     setStudents([]);
     setSearchTerm('');
+  };
+
+  const isSysadmin = user?.username === 'sysadmin';
+
+  const normalizePaymentMethodId = (method) => {
+    const lower = String(method || '').toLowerCase();
+    if (lower.includes('bank')) return 'bank_transfer';
+    return 'cash';
+  };
+
+  const openEditPaymentModal = (payment) => {
+    if (!payment) return;
+    const methodId = normalizePaymentMethodId(payment.payment_method);
+    setEditFormData({
+      payment_amount: payment.payment_amount || payment.base_currency_amount || '',
+      payment_currency: payment.payment_currency || payment.currency_id || '',
+      payment_method_id: methodId,
+      payment_account_id: payment.payment_account_id || '',
+      payment_date: payment.payment_date ? payment.payment_date.split('T')[0] : '',
+      reference_number: payment.reference_number || payment.receipt_number || '',
+      notes: payment.notes || ''
+    });
+    setEditReason('');
+    setShowEditPaymentModal(true);
+    if (chartAccounts.length === 0) {
+      fetchChartAccounts();
+    }
+  };
+
+  const handleUpdatePayment = async (e) => {
+    e.preventDefault();
+    if (!selectedPayment) return;
+    if (!editReason.trim()) {
+      setErrorMessage('Reason is required for editing a payment');
+      setShowErrorModal(true);
+      return;
+    }
+    if (['cash', 'bank_transfer'].includes(editFormData.payment_method_id) && !editFormData.payment_account_id) {
+      setErrorMessage('Please select a payment account for the chosen payment method');
+      setShowErrorModal(true);
+      return;
+    }
+    setEditPaymentLoading(true);
+    try {
+      const payload = {
+        payment_amount: parseFloat(editFormData.payment_amount),
+        payment_currency: editFormData.payment_currency,
+        payment_method: editFormData.payment_method_id === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
+        payment_date: editFormData.payment_date,
+        reference_number: editFormData.reference_number,
+        notes: editFormData.notes || '',
+        payment_account_id: editFormData.payment_account_id || null,
+        reason: editReason.trim()
+      };
+
+      await axios.put(`${BASE_URL}/fees/payments/${selectedPayment.id}`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setShowEditPaymentModal(false);
+      setShowViewModal(false);
+      setSelectedPayment(null);
+      await fetchPayments();
+      setSuccessMessage('Payment updated successfully');
+      setShowSuccessModal(true);
+    } catch (err) {
+      console.error('Error updating payment:', err);
+      setErrorMessage(err.response?.data?.message || 'Failed to update payment');
+      setShowErrorModal(true);
+    } finally {
+      setEditPaymentLoading(false);
+    }
+  };
+
+  const handleDeletePayment = async () => {
+    if (!selectedPayment) return;
+    if (!deleteReason.trim()) {
+      setErrorMessage('Reason is required for deleting a payment');
+      setShowErrorModal(true);
+      return;
+    }
+    try {
+      await axios.delete(`${BASE_URL}/fees/payments/${selectedPayment.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { reason: deleteReason.trim() }
+      });
+      setShowDeletePaymentModal(false);
+      setShowViewModal(false);
+      setSelectedPayment(null);
+      await fetchPayments();
+      setSuccessMessage('Payment deleted successfully');
+      setShowSuccessModal(true);
+    } catch (err) {
+      console.error('Error deleting payment:', err);
+      setErrorMessage(err.response?.data?.message || 'Failed to delete payment');
+      setShowErrorModal(true);
+    }
   };
 
   // Expose openModal method to parent via ref
@@ -226,6 +392,44 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
       setLoading(false);
       setTableLoading(false);
     }
+  };
+
+  const fetchChartAccounts = async () => {
+    try {
+      setAccountLoading(true);
+      setAccountError('');
+      const response = await axios.get(`${BASE_URL}/accounting/chart-of-accounts`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.success) {
+        setChartAccounts(response.data.data || []);
+      } else {
+        setAccountError('Failed to load chart of accounts.');
+      }
+    } catch (err) {
+      setAccountError(err.response?.data?.message || 'Failed to load chart of accounts.');
+    } finally {
+      setAccountLoading(false);
+    }
+  };
+
+  const getAccountOptions = (paymentMethodId) => {
+    if (!paymentMethodId || chartAccounts.length === 0) {
+      return [];
+    }
+    const isCash = paymentMethodId === 'cash';
+    const preferredCode = isCash ? '1000' : '1010';
+    const parentByCode = chartAccounts.find(acc => acc.code === preferredCode);
+    const parentByName = chartAccounts.find(acc => {
+      const name = (acc.name || '').toLowerCase();
+      return isCash ? name.includes('cash') : name.includes('bank');
+    });
+    const parent = parentByCode || parentByName;
+    if (!parent) {
+      return [];
+    }
+    const children = chartAccounts.filter(acc => acc.parent_id === parent.id && acc.is_active !== 0);
+    return children.length > 0 ? children : [parent];
   };
 
   const fetchClasses = async () => {
@@ -366,6 +570,14 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         setShowErrorModal(true);
         return;
       }
+      if (['cash', 'bank_transfer'].includes(tuitionFormData.payment_method_id)) {
+        const options = getAccountOptions(tuitionFormData.payment_method_id);
+        if (options.length > 0 && !tuitionFormData.payment_account_id) {
+          setErrorMessage('Please select a payment account');
+          setShowErrorModal(true);
+          return;
+        }
+      }
       if (!tuitionFormData.reference_number) {
         setErrorMessage('Please enter a reference number');
         setShowErrorModal(true);
@@ -413,6 +625,10 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
           reference_number: tuitionFormData.reference_number,
           notes: tuitionFormData.notes || ''
         };
+
+        if (tuitionFormData.payment_account_id) {
+          paymentPayload.payment_account_id = tuitionFormData.payment_account_id;
+        }
         
         if (tuitionFormData.invoice_structure_id) {
           paymentPayload.invoice_structure_id = tuitionFormData.invoice_structure_id;
@@ -423,12 +639,16 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         });
 
         if (response.data.success) {
+          const currencyInfo = currencies.find(c => c.id === tuitionFormData.currency_id);
+          const currencyDisplay = currencyInfo
+            ? `${currencyInfo.symbol || ''}${currencyInfo.code ? ` ${currencyInfo.code}` : ''}`.trim() || currencyInfo.name
+            : '';
           receiptData = {
             receipt_number: response.data.data.receipt_number,
             student_name: `${selectedStudent.Name} ${selectedStudent.Surname}`,
             student_reg: selectedStudent.RegNumber,
             amount: tuitionFormData.amount,
-            currency: currencies.find(c => c.id === tuitionFormData.currency_id)?.symbol || '',
+            currency: currencyDisplay,
             payment_date: tuitionFormData.payment_date,
             payment_method: paymentMethods.find(m => m.id === tuitionFormData.payment_method_id)?.name || 'Cash',
             fee_type: 'tuition',
@@ -456,12 +676,16 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         });
 
         if (response.data.success) {
+          const currencyInfo = currencies.find(c => c.id === additionalFormData.currency_id);
+          const currencyDisplay = currencyInfo
+            ? `${currencyInfo.symbol || ''}${currencyInfo.code ? ` ${currencyInfo.code}` : ''}`.trim() || currencyInfo.name
+            : '';
           receiptData = {
             receipt_number: response.data.data.receipt_number,
             student_name: `${selectedStudent.Name} ${selectedStudent.Surname}`,
             student_reg: selectedStudent.RegNumber,
             amount: additionalFormData.payment_amount,
-            currency: currencies.find(c => c.id === additionalFormData.currency_id)?.symbol || '',
+            currency: currencyDisplay,
             payment_date: additionalFormData.payment_date,
             payment_method: additionalFormData.payment_method,
             fee_type: 'additional',
@@ -505,41 +729,425 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
     setErrorMessage('');
   };
 
-  const downloadReceipt = () => {
+  const downloadReceipt = async () => {
     if (!receipt) return;
-    
-    const doc = new jsPDF();
-    doc.setFont('helvetica');
-    doc.setFontSize(16);
-    doc.text('PAYMENT RECEIPT', 105, 20, { align: 'center' });
-    doc.setLineWidth(0.5);
-    doc.line(20, 25, 190, 25);
-    
+
+    const safe = (value) => (value === null || value === undefined || value === '' ? 'N/A' : value);
+    const amountLine = `${safe(receipt.amount)} ${safe(receipt.currency)}`;
+
+    const loadLogo = () => new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = logo;
+    });
+
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 36;
+    const contentWidth = pageWidth - margin * 2;
+
+    const logoImg = await loadLogo();
+    if (logoImg) {
+      const logoHeight = 40;
+      const logoWidth = (logoImg.width / logoImg.height) * logoHeight;
+      doc.addImage(logoImg, 'PNG', margin, 40, logoWidth, logoHeight);
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('Norton Adventist', margin + 52, 60);
+
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text('Receipt Number:', 20, 40);
-    doc.text(receipt.receipt_number, 60, 40);
-    doc.text('Date:', 20, 50);
-    doc.text(receipt.payment_date, 60, 50);
-    
+    doc.text('Payment Receipt', pageWidth - margin, 50, { align: 'right' });
+    doc.text(safe(receipt.receipt_number), pageWidth - margin, 64, { align: 'right' });
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, 90, pageWidth - margin, 90);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Receipt Details', margin, 112);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Thank you for your payment.', margin, 126);
+
+    const leftX = margin;
+    const rightX = margin + contentWidth / 2 + 8;
+    let y = 152;
+    const rowGap = 34;
+
+    const label = (text, x, yPos) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(text, x, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+    };
+
+    label('Date', leftX, y);
+    doc.text(safe(receipt.payment_date), leftX, y + 14);
+
+    label('Reference', rightX, y);
+    doc.text(safe(receipt.reference_number), rightX, y + 14);
+
+    y += rowGap;
+    label('Student', leftX, y);
+    doc.text(safe(receipt.student_name), leftX, y + 14);
+
+    label('Student Reg', rightX, y);
+    doc.text(safe(receipt.student_reg), rightX, y + 14);
+
+    y += rowGap;
+    label('Payment Method', leftX, y);
+    doc.text(safe(receipt.payment_method), leftX, y + 14);
+
+    label('Class / Term', rightX, y);
+    doc.text(`${safe(receipt.class_name)} • ${safe(receipt.term)} ${safe(receipt.academic_year)}`, rightX, y + 14);
+
+    y += rowGap + 8;
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin, y, contentWidth, 42, 6, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Amount Paid', margin + 12, y + 17);
     doc.setFontSize(12);
-    doc.text('Student Information:', 20, 70);
-    doc.setFontSize(10);
-    doc.text('Name:', 20, 80);
-    doc.text(receipt.student_name, 60, 80);
-    doc.text('Registration:', 20, 90);
-    doc.text(receipt.student_reg, 60, 90);
-    
-    doc.setFontSize(12);
-    doc.text('Payment Details:', 20, 110);
-    doc.setFontSize(10);
-    doc.text('Amount:', 20, 120);
-    doc.text(`${receipt.amount} ${receipt.currency}`, 60, 120);
-    doc.text('Payment Method:', 20, 130);
-    doc.text(receipt.payment_method, 60, 130);
-    doc.text('Reference:', 20, 140);
-    doc.text(receipt.reference_number, 60, 140);
-    
+    doc.setTextColor(15, 23, 42);
+    doc.text(amountLine, pageWidth - margin - 12, y + 18, { align: 'right' });
+
+    y += 70;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Generated by Norton Adventist', margin, y);
+    doc.text('Keep this receipt for your records.', pageWidth - margin, y, { align: 'right' });
+
     doc.save(`receipt-${receipt.receipt_number}.pdf`);
+  };
+
+  const printReceipt = () => {
+    if (!receipt) return;
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      return;
+    }
+
+    const safe = (value) => (value === null || value === undefined || value === '' ? 'N/A' : value);
+    const amountLine = `${safe(receipt.amount)} ${safe(receipt.currency)}`;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Payment Receipt</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: 'Nunito', Arial, sans-serif; color: #0f172a; margin: 0; padding: 24px; background: #f8fafc; }
+            .receipt { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
+            .receipt-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+            .brand { display: flex; align-items: center; gap: 12px; }
+            .brand img { height: 42px; }
+            .brand h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+            .meta { text-align: right; font-size: 0.8rem; color: #64748b; }
+            .receipt-body { padding: 18px 20px 8px 20px; }
+            .title { font-size: 0.95rem; font-weight: 700; margin: 0 0 4px 0; }
+            .subtitle { font-size: 0.75rem; color: #64748b; margin: 0 0 16px 0; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+            .label { font-size: 0.7rem; color: #64748b; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+            .value { font-size: 0.85rem; color: #0f172a; }
+            .amount { margin-top: 16px; padding: 12px; background: #f1f5f9; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+            .amount .label { margin: 0; }
+            .amount .value { font-size: 1rem; font-weight: 700; }
+            .receipt-footer { padding: 14px 20px; border-top: 1px dashed #cbd5f5; font-size: 0.7rem; color: #64748b; display: flex; justify-content: space-between; align-items: center; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="receipt-header">
+              <div class="brand">
+                <img src="${logo}" alt="Logo" />
+                <h1>Norton Adventist</h1>
+              </div>
+              <div class="meta">
+                <div>Payment Receipt</div>
+                <div>${safe(receipt.receipt_number)}</div>
+              </div>
+            </div>
+            <div class="receipt-body">
+              <div class="title">Receipt Details</div>
+              <div class="subtitle">Thank you for your payment.</div>
+              <div class="grid">
+                <div>
+                  <div class="label">Date</div>
+                  <div class="value">${safe(receipt.payment_date)}</div>
+                </div>
+                <div>
+                  <div class="label">Reference</div>
+                  <div class="value">${safe(receipt.reference_number)}</div>
+                </div>
+                <div>
+                  <div class="label">Student</div>
+                  <div class="value">${safe(receipt.student_name)}</div>
+                </div>
+                <div>
+                  <div class="label">Student Reg</div>
+                  <div class="value">${safe(receipt.student_reg)}</div>
+                </div>
+                <div>
+                  <div class="label">Payment Method</div>
+                  <div class="value">${safe(receipt.payment_method)}</div>
+                </div>
+                <div>
+                  <div class="label">Class / Term</div>
+                  <div class="value">${safe(receipt.class_name)} • ${safe(receipt.term)} ${safe(receipt.academic_year)}</div>
+                </div>
+              </div>
+              <div class="amount">
+                <div class="label">Amount Paid</div>
+                <div class="value">${amountLine}</div>
+              </div>
+            </div>
+            <div class="receipt-footer">
+              <div>Generated by Norton Adventist</div>
+              <div>Keep this receipt for your records.</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
+
+  const buildViewReceiptData = () => {
+    if (!selectedPayment) return null;
+    const studentName = selectedPayment.student_name && selectedPayment.student_surname
+      ? `${selectedPayment.student_name} ${selectedPayment.student_surname}`
+      : selectedPayment.student_name || 'N/A';
+    const currencyLabel = `${selectedPayment.currency_symbol || ''}${selectedPayment.currency_name ? ` ${selectedPayment.currency_name}` : ''}`.trim();
+    return {
+      receipt_number: selectedPayment.receipt_number || 'N/A',
+      payment_date: formatDate(selectedPayment.payment_date || selectedPayment.created_at),
+      student_name: studentName,
+      student_reg: selectedPayment.student_reg_number || 'N/A',
+      amount: selectedPayment.base_currency_amount || selectedPayment.payment_amount || 0,
+      currency: currencyLabel || 'N/A',
+      payment_method: selectedPayment.payment_method || 'N/A',
+      reference_number: selectedPayment.reference_number || 'N/A',
+      class_name: selectedPayment.class_name || 'N/A',
+      term: selectedPayment.term || 'N/A',
+      academic_year: selectedPayment.academic_year || 'N/A',
+      notes: selectedPayment.notes || ''
+    };
+  };
+
+  const downloadViewReceipt = async () => {
+    if (!selectedPayment) return;
+    const data = buildViewReceiptData();
+    if (!data) return;
+
+    const safe = (value) => (value === null || value === undefined || value === '' ? 'N/A' : value);
+    const amountLine = `${safe(data.amount)} ${safe(data.currency)}`;
+
+    const loadLogo = () => new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = logo;
+    });
+
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 36;
+    const contentWidth = pageWidth - margin * 2;
+
+    const logoImg = await loadLogo();
+    if (logoImg) {
+      const logoHeight = 40;
+      const logoWidth = (logoImg.width / logoImg.height) * logoHeight;
+      doc.addImage(logoImg, 'PNG', margin, 40, logoWidth, logoHeight);
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('Norton Adventist', margin + 52, 60);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text('Payment Receipt', pageWidth - margin, 50, { align: 'right' });
+    doc.text(safe(data.receipt_number), pageWidth - margin, 64, { align: 'right' });
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(margin, 90, pageWidth - margin, 90);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Receipt Details', margin, 112);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Thank you for your payment.', margin, 126);
+
+    const leftX = margin;
+    const rightX = margin + contentWidth / 2 + 8;
+    let y = 152;
+    const rowGap = 34;
+
+    const label = (text, x, yPos) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text(text, x, yPos);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+    };
+
+    label('Date', leftX, y);
+    doc.text(safe(data.payment_date), leftX, y + 14);
+
+    label('Reference', rightX, y);
+    doc.text(safe(data.reference_number), rightX, y + 14);
+
+    y += rowGap;
+    label('Student', leftX, y);
+    doc.text(safe(data.student_name), leftX, y + 14);
+
+    label('Student Reg', rightX, y);
+    doc.text(safe(data.student_reg), rightX, y + 14);
+
+    y += rowGap;
+    label('Payment Method', leftX, y);
+    doc.text(safe(data.payment_method), leftX, y + 14);
+
+    label('Class / Term', rightX, y);
+    doc.text(`${safe(data.class_name)} • ${safe(data.term)} ${safe(data.academic_year)}`, rightX, y + 14);
+
+    y += rowGap + 8;
+    doc.setFillColor(241, 245, 249);
+    doc.roundedRect(margin, y, contentWidth, 42, 6, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Amount Paid', margin + 12, y + 17);
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text(amountLine, pageWidth - margin - 12, y + 18, { align: 'right' });
+
+    y += 70;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Generated by Norton Adventist', margin, y);
+    doc.text('Keep this receipt for your records.', pageWidth - margin, y, { align: 'right' });
+
+    doc.save(`receipt-${safe(data.receipt_number)}.pdf`);
+  };
+
+  const printViewReceipt = () => {
+    if (!selectedPayment) return;
+    const data = buildViewReceiptData();
+    if (!data) return;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) {
+      return;
+    }
+
+    const safe = (value) => (value === null || value === undefined || value === '' ? 'N/A' : value);
+    const amountLine = `${safe(data.amount)} ${safe(data.currency)}`;
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Payment Receipt</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: 'Nunito', Arial, sans-serif; color: #0f172a; margin: 0; padding: 24px; background: #f8fafc; }
+            .receipt { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; }
+            .receipt-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+            .brand { display: flex; align-items: center; gap: 12px; }
+            .brand img { height: 42px; }
+            .brand h1 { font-size: 1.05rem; margin: 0; font-weight: 700; }
+            .meta { text-align: right; font-size: 0.8rem; color: #64748b; }
+            .receipt-body { padding: 18px 20px 8px 20px; }
+            .title { font-size: 0.95rem; font-weight: 700; margin: 0 0 4px 0; }
+            .subtitle { font-size: 0.75rem; color: #64748b; margin: 0 0 16px 0; }
+            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
+            .label { font-size: 0.7rem; color: #64748b; margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; }
+            .value { font-size: 0.85rem; color: #0f172a; }
+            .amount { margin-top: 16px; padding: 12px; background: #f1f5f9; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+            .amount .label { margin: 0; }
+            .amount .value { font-size: 1rem; font-weight: 700; }
+            .receipt-footer { padding: 14px 20px; border-top: 1px dashed #cbd5f5; font-size: 0.7rem; color: #64748b; display: flex; justify-content: space-between; align-items: center; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="receipt-header">
+              <div class="brand">
+                <img src="${logo}" alt="Logo" />
+                <h1>Norton Adventist</h1>
+              </div>
+              <div class="meta">
+                <div>Payment Receipt</div>
+                <div>${safe(data.receipt_number)}</div>
+              </div>
+            </div>
+            <div class="receipt-body">
+              <div class="title">Receipt Details</div>
+              <div class="subtitle">Thank you for your payment.</div>
+              <div class="grid">
+                <div>
+                  <div class="label">Date</div>
+                  <div class="value">${safe(data.payment_date)}</div>
+                </div>
+                <div>
+                  <div class="label">Reference</div>
+                  <div class="value">${safe(data.reference_number)}</div>
+                </div>
+                <div>
+                  <div class="label">Student</div>
+                  <div class="value">${safe(data.student_name)}</div>
+                </div>
+                <div>
+                  <div class="label">Student Reg</div>
+                  <div class="value">${safe(data.student_reg)}</div>
+                </div>
+                <div>
+                  <div class="label">Payment Method</div>
+                  <div class="value">${safe(data.payment_method)}</div>
+                </div>
+                <div>
+                  <div class="label">Class / Term</div>
+                  <div class="value">${safe(data.class_name)} • ${safe(data.term)} ${safe(data.academic_year)}</div>
+                </div>
+              </div>
+              <div class="amount">
+                <div class="label">Amount Paid</div>
+                <div class="value">${amountLine}</div>
+              </div>
+            </div>
+            <div class="receipt-footer">
+              <div>Generated by Norton Adventist</div>
+              <div>Keep this receipt for your records.</div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
   };
 
   const handleSearch = (e) => {
@@ -650,9 +1258,6 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
               <option value="">All Methods</option>
               <option value="Cash">Cash</option>
               <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
-              <option value="Mobile Money">Mobile Money</option>
-              <option value="Other">Other</option>
             </select>
           </div>
 
@@ -791,6 +1396,28 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                       >
                         <FontAwesomeIcon icon={faEye} />
                       </button>
+                      {isSysadmin && (
+                        <>
+                          <button
+                            onClick={() => openEditPaymentModal(payment)}
+                            style={{ color: '#0f766e', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Edit Payment"
+                          >
+                            <FontAwesomeIcon icon={faEdit} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedPayment(payment);
+                              setDeleteReason('');
+                              setShowDeletePaymentModal(true);
+                            }}
+                            style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Delete Payment"
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -1217,7 +1844,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                       {paymentType === 'tuition' ? (
                         <select
                           value={tuitionFormData.payment_method_id}
-                          onChange={(e) => setTuitionFormData(prev => ({ ...prev, payment_method_id: e.target.value }))}
+                          onChange={(e) => setTuitionFormData(prev => ({ ...prev, payment_method_id: e.target.value, payment_account_id: '' }))}
                           className="form-control"
                           required
                         >
@@ -1240,12 +1867,38 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                           <option value="">Select Payment Method</option>
                           <option value="Cash">Cash</option>
                           <option value="Bank Transfer">Bank Transfer</option>
-                          <option value="Cheque">Cheque</option>
-                          <option value="Mobile Money">Mobile Money</option>
-                          <option value="Other">Other</option>
                         </select>
                       )}
                     </div>
+
+                    {paymentType === 'tuition' && ['cash', 'bank_transfer'].includes(tuitionFormData.payment_method_id) && (
+                      <div className="form-group">
+                        <label className="form-label">
+                          Payment Account <span className="required">*</span>
+                        </label>
+                        <select
+                          value={tuitionFormData.payment_account_id}
+                          onChange={(e) => setTuitionFormData(prev => ({ ...prev, payment_account_id: e.target.value }))}
+                          className="form-control"
+                          required
+                          disabled={accountLoading}
+                        >
+                          <option value="">
+                            {accountLoading ? 'Loading accounts...' : 'Select Account'}
+                          </option>
+                          {getAccountOptions(tuitionFormData.payment_method_id).map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.code} - {account.name}
+                            </option>
+                          ))}
+                        </select>
+                        {accountError && (
+                          <div style={{ marginTop: '6px', fontSize: '0.7rem', color: '#dc2626' }}>
+                            {accountError}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="form-group">
                       <label className="form-label">
@@ -1405,15 +2058,62 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
               </button>
             </div>
             <div className="modal-body">
-              <div style={{ marginBottom: '16px' }}>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Receipt Number:</strong> {receipt.receipt_number}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Date:</strong> {receipt.payment_date}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Student:</strong> {receipt.student_name}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Amount:</strong> {receipt.amount} {receipt.currency}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Reference:</strong> {receipt.reference_number}</p>
-                <p style={{ fontSize: '0.75rem', marginBottom: '8px' }}><strong>Payment Method:</strong> {receipt.payment_method}</p>
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img src={logo} alt="Logo" style={{ height: '34px' }} />
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>Norton Adventist</div>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: '0.7rem', color: '#64748b' }}>
+                    <div>Payment Receipt</div>
+                    <div style={{ fontWeight: 600 }}>{receipt.receipt_number}</div>
+                  </div>
+                </div>
+                <div style={{ padding: '16px' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Receipt Details</div>
+                  <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '12px' }}>Thank you for your payment.</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Date</div>
+                      <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{receipt.payment_date}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Reference</div>
+                      <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{receipt.reference_number || 'N/A'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Student</div>
+                      <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{receipt.student_name}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Student Reg</div>
+                      <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{receipt.student_reg}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Payment Method</div>
+                      <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{receipt.payment_method}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Class / Term</div>
+                      <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>
+                        {receipt.class_name || 'N/A'} • {receipt.term || 'N/A'} {receipt.academic_year || ''}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '14px', padding: '10px 12px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b' }}>Amount Paid</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                      {receipt.amount} {receipt.currency}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: '10px 16px', borderTop: '1px dashed #cbd5f5', fontSize: '0.65rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Generated by Norton Adventist</span>
+                  <span>Keep this receipt for your records.</span>
+                </div>
               </div>
               <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button onClick={printReceipt} className="modal-btn modal-btn-confirm">Print</button>
                 <button onClick={downloadReceipt} className="modal-btn modal-btn-confirm">Download PDF</button>
                 <button onClick={() => setShowReceipt(false)} className="modal-btn modal-btn-cancel">Close</button>
               </div>
@@ -1427,7 +2127,7 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
         <div className="modal-overlay" onClick={() => setShowViewModal(false)} style={{ zIndex: 1003 }}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
-              <h3 className="modal-title">Payment Details</h3>
+              <h3 className="modal-title">Payment Receipt</h3>
               <button className="modal-close-btn" onClick={() => setShowViewModal(false)}>
                 <FontAwesomeIcon icon={faTimes} />
               </button>
@@ -1438,113 +2138,101 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                   <div className="loading-spinner"></div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Receipt Number
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                        {selectedPayment.receipt_number || 'N/A'}
-                      </p>
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <img src={logo} alt="Logo" style={{ height: '34px' }} />
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>Norton Adventist</div>
                     </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Reference Number
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                        {selectedPayment.reference_number || 'N/A'}
-                      </p>
+                    <div style={{ textAlign: 'right', fontSize: '0.7rem', color: '#64748b' }}>
+                      <div>Payment Receipt</div>
+                      <div style={{ fontWeight: 600 }}>{selectedPayment.receipt_number || 'N/A'}</div>
                     </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Student Name
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                        {selectedPayment.student_name && selectedPayment.student_surname 
-                          ? `${selectedPayment.student_name} ${selectedPayment.student_surname}`
-                          : 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Registration Number
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                        {selectedPayment.student_reg_number || 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Payment Amount
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0, fontWeight: 600 }}>
-                        {selectedPayment.base_currency_amount || selectedPayment.payment_amount || 0} {selectedPayment.currency_symbol || selectedPayment.currency_name || ''}
-                      </p>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Payment Method
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                        {selectedPayment.payment_method || 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Payment Date
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                        {selectedPayment.payment_date 
-                          ? new Date(selectedPayment.payment_date).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric'
-                            })
-                          : 'N/A'}
-                      </p>
-                    </div>
-                    {selectedPayment.exchange_rate && selectedPayment.exchange_rate !== 1 && (
+                  </div>
+                  <div style={{ padding: '16px' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>Receipt Details</div>
+                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '12px' }}>Thank you for your payment.</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 16px' }}>
                       <div>
-                        <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                          Exchange Rate
-                        </label>
-                        <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0 }}>
-                          {selectedPayment.exchange_rate}
-                        </p>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Date</div>
+                        <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{formatDate(selectedPayment.payment_date || selectedPayment.created_at)}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Reference</div>
+                        <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{selectedPayment.reference_number || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Student</div>
+                        <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>
+                          {selectedPayment.student_name && selectedPayment.student_surname 
+                            ? `${selectedPayment.student_name} ${selectedPayment.student_surname}`
+                            : selectedPayment.student_name || 'N/A'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Student Reg</div>
+                        <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{selectedPayment.student_reg_number || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Payment Method</div>
+                        <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>{selectedPayment.payment_method || 'N/A'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Class / Term</div>
+                        <div style={{ fontSize: '0.8rem', color: '#0f172a' }}>
+                          {selectedPayment.class_name || 'N/A'} • {selectedPayment.term || 'N/A'} {selectedPayment.academic_year || ''}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '14px', padding: '10px 12px', background: '#f1f5f9', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b' }}>Amount Paid</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>
+                        {selectedPayment.base_currency_amount || selectedPayment.payment_amount || 0} {selectedPayment.currency_symbol || selectedPayment.currency_name || ''}
+                      </div>
+                    </div>
+                    {selectedPayment.notes && (
+                      <div style={{ marginTop: '12px' }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', marginBottom: '4px' }}>Notes</div>
+                        <div style={{ fontSize: '0.75rem', color: '#0f172a', background: '#f8fafc', borderRadius: '6px', padding: '8px' }}>
+                          {selectedPayment.notes}
+                        </div>
+                      </div>
+                    )}
+                    {selectedPayment.created_at && (
+                      <div style={{ marginTop: '12px', fontSize: '0.65rem', color: '#64748b' }}>
+                        Created at: {formatDateTime(selectedPayment.created_at)}
                       </div>
                     )}
                   </div>
-                  {selectedPayment.notes && (
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Notes
-                      </label>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', margin: 0, padding: '8px', background: '#f9fafb', borderRadius: '4px' }}>
-                        {selectedPayment.notes}
-                      </p>
-                    </div>
-                  )}
-                  {selectedPayment.created_at && (
-                    <div>
-                      <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px', display: 'block' }}>
-                        Created At
-                      </label>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
-                        {new Date(selectedPayment.created_at).toLocaleString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                  )}
+                  <div style={{ padding: '10px 16px', borderTop: '1px dashed #cbd5f5', fontSize: '0.65rem', color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Generated by Norton Adventist</span>
+                    <span>Keep this receipt for your records.</span>
+                  </div>
                 </div>
               )}
             </div>
             <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              {isSysadmin && (
+                <>
+                  <button
+                    onClick={() => openEditPaymentModal(selectedPayment)}
+                    className="modal-btn modal-btn-confirm"
+                  >
+                    Edit Payment
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDeleteReason('');
+                      setShowDeletePaymentModal(true);
+                    }}
+                    className="modal-btn modal-btn-delete"
+                  >
+                    Delete Payment
+                  </button>
+                </>
+              )}
+              <button onClick={printViewReceipt} className="modal-btn modal-btn-confirm">Print</button>
+              <button onClick={downloadViewReceipt} className="modal-btn modal-btn-confirm">Download PDF</button>
               <button
                 onClick={() => {
                   setShowViewModal(false);
@@ -1553,6 +2241,184 @@ const TuitionFeesPayment = forwardRef((props, ref) => {
                 className="modal-btn modal-btn-cancel"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payment Modal */}
+      {showEditPaymentModal && selectedPayment && (
+        <div className="modal-overlay" onClick={() => setShowEditPaymentModal(false)} style={{ zIndex: 1004 }}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Payment</h3>
+              <button className="modal-close-btn" onClick={() => setShowEditPaymentModal(false)}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                  {selectedPayment.student_name && selectedPayment.student_surname
+                    ? `${selectedPayment.student_name} ${selectedPayment.student_surname}`
+                    : selectedPayment.student_name || 'Student'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                  {selectedPayment.student_reg_number || 'N/A'}
+                </div>
+              </div>
+              <form onSubmit={handleUpdatePayment} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">Amount <span className="required">*</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="form-control"
+                    value={editFormData.payment_amount}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, payment_amount: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Currency <span className="required">*</span></label>
+                  <select
+                    className="form-control"
+                    value={editFormData.payment_currency}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, payment_currency: e.target.value }))}
+                    required
+                  >
+                    <option value="">Select Currency</option>
+                    {currencies.map((currency) => (
+                      <option key={currency.id} value={currency.id}>
+                        {currency.name} ({currency.symbol})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Payment Method <span className="required">*</span></label>
+                  <select
+                    className="form-control"
+                    value={editFormData.payment_method_id}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, payment_method_id: e.target.value, payment_account_id: '' }))}
+                    required
+                  >
+                    <option value="">Select Payment Method</option>
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                  </select>
+                </div>
+                {['cash', 'bank_transfer'].includes(editFormData.payment_method_id) && (
+                  <div className="form-group">
+                    <label className="form-label">Payment Account <span className="required">*</span></label>
+                    <select
+                      className="form-control"
+                      value={editFormData.payment_account_id}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, payment_account_id: e.target.value }))}
+                      required
+                      disabled={accountLoading}
+                    >
+                      <option value="">
+                        {accountLoading ? 'Loading accounts...' : 'Select Account'}
+                      </option>
+                      {getAccountOptions(editFormData.payment_method_id).map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.code} - {account.name}
+                        </option>
+                      ))}
+                    </select>
+                    {accountError && (
+                      <div style={{ marginTop: '6px', fontSize: '0.7rem', color: '#dc2626' }}>
+                        {accountError}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">Payment Date <span className="required">*</span></label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={editFormData.payment_date}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, payment_date: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Reference Number <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={editFormData.reference_number}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, reference_number: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Notes</label>
+                  <textarea
+                    className="form-control"
+                    rows="3"
+                    value={editFormData.notes}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Reason <span className="required">*</span></label>
+                  <textarea
+                    className="form-control"
+                    rows="2"
+                    value={editReason}
+                    onChange={(e) => setEditReason(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <button type="button" onClick={() => setShowEditPaymentModal(false)} className="modal-btn modal-btn-cancel">
+                    Cancel
+                  </button>
+                  <button type="submit" className="modal-btn modal-btn-confirm" disabled={editPaymentLoading}>
+                    {editPaymentLoading ? 'Updating...' : 'Update Payment'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Payment Modal */}
+      {showDeletePaymentModal && selectedPayment && (
+        <div className="modal-overlay" onClick={() => setShowDeletePaymentModal(false)} style={{ zIndex: 1005 }}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Delete Payment</h3>
+              <button className="modal-close-btn" onClick={() => setShowDeletePaymentModal(false)}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                This will permanently delete the payment and recompute balances. This action cannot be undone.
+              </div>
+              <div className="form-group">
+                <label className="form-label">Reason <span className="required">*</span></label>
+                <textarea
+                  className="form-control"
+                  rows="3"
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button className="modal-btn modal-btn-cancel" onClick={() => setShowDeletePaymentModal(false)}>
+                Cancel
+              </button>
+              <button className="modal-btn modal-btn-delete" onClick={handleDeletePayment}>
+                Delete Payment
               </button>
             </div>
           </div>

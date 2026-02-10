@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import BASE_URL from '../../../contexts/Api';
 import { useAuth } from '../../../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faFileAlt, 
@@ -21,6 +21,7 @@ const TYPE_PREFIX = {
 
 const ChartOfAccounts = () => {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -236,89 +237,8 @@ const ChartOfAccounts = () => {
     }
   };
 
-  const handleViewAccount = async (accountId) => {
-    setShowViewModal(true);
-    setViewModalLoading(true);
-    setViewAccount(null);
-    setViewParent(null);
-    setViewBalances([]);
-    setViewLedgerEntries([]);
-    setViewLedgerPagination({
-      current_page: 1,
-      total_pages: 1,
-      total_records: 0,
-      limit: 25
-    });
-    setViewLedgerFilters({
-      search: '',
-      startDate: '',
-      endDate: '',
-      transactionType: ''
-    });
-
-    try {
-      // Fetch account details
-      const response = await axios.get(`${BASE_URL}/accounting/chart-of-accounts/${accountId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const accountData = response.data.data;
-      setViewAccount(accountData);
-
-      // Fetch parent account if exists
-      if (accountData.parent_id) {
-        try {
-          const parentRes = await axios.get(`${BASE_URL}/accounting/chart-of-accounts/${accountData.parent_id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (parentRes.data.success) {
-            setViewParent(parentRes.data.data);
-          }
-        } catch (err) {
-          console.error('Error fetching parent account:', err);
-        }
-      }
-
-      // Fetch balances for each currency
-      const curRes = await axios.get(`${BASE_URL}/accounting/currencies`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (curRes.data.success) {
-        const currencies = curRes.data.data || [];
-        const balancesArr = await Promise.all(
-          currencies.map(async (cur) => {
-            try {
-              const balRes = await axios.get(`${BASE_URL}/accounting/account-balances/${accountId}?currency_id=${cur.id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-              });
-              return {
-                currency: cur,
-                balance: balRes.data.data ? balRes.data.data.balance : 0,
-                as_of_date: balRes.data.data ? balRes.data.data.as_of_date : '',
-              };
-            } catch {
-              return { currency: cur, balance: 0, as_of_date: '' };
-            }
-          })
-        );
-        setViewBalances(balancesArr);
-      }
-
-      // Fetch ledger entries
-      await fetchViewLedgerEntriesWithFilters(accountId, 1, {
-        search: '',
-        startDate: '',
-        endDate: '',
-        transactionType: ''
-      });
-    } catch (err) {
-      console.error('Error fetching account:', err);
-    } finally {
-      setViewModalLoading(false);
-    }
+  const handleViewAccount = (accountId) => {
+    navigate(`/dashboard/accounting/chart-of-accounts/view/${accountId}`);
   };
 
 

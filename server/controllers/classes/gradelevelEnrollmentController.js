@@ -255,26 +255,7 @@ class GradelevelEnrollmentController {
                 }
             }
             
-            let enrollmentId;
-            try {
-                const [result] = await conn.execute(
-                    'INSERT INTO enrollments_gradelevel_classes (student_regnumber, gradelevel_class_id, status) VALUES (?, ?, ?)',
-                    [student_regnumber, gradelevel_class_id, status]
-                );
-                enrollmentId = result.insertId;
-            } catch (insertError) {
-                // Handle database constraint violation
-                if (insertError.code === 'ER_DUP_ENTRY' || insertError.errno === 1062) {
-                    await conn.rollback();
-                    return res.status(400).json({ 
-                        success: false, 
-                        message: 'Student already has an enrollment. The database constraint prevents duplicate enrollments.' 
-                    });
-                }
-                throw insertError; // Re-throw if it's a different error
-            }
-
-            // Create DEBIT transaction for class enrollment (always create transaction)
+            // Prepare class info for messaging and fee lookup
             const [classInfo] = await conn.execute(
                 `SELECT gc.name as class_name, s.name as stream_name 
                  FROM gradelevel_classes gc 
@@ -304,6 +285,20 @@ class GradelevelEnrollmentController {
             // Use provided term/year if available, otherwise use current from class term year
             const enrollmentTerm = term || currentTerm;
             const enrollmentAcademicYear = academic_year || currentAcademicYear;
+
+            if (!enrollmentTerm || !enrollmentAcademicYear) {
+                await conn.rollback();
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'MISSING_TERM_YEAR',
+                    message: `Cannot enroll student: missing term/academic year for class "${className} (${streamName})". Please set the class term/year before enrolling students.`,
+                    details: {
+                        className: `${className} (${streamName})`,
+                        term: enrollmentTerm,
+                        academicYear: enrollmentAcademicYear
+                    }
+                });
+            }
             
             // Get invoice structure for this class and term/year (exact match only)
             let feeAmount = 0;
@@ -338,6 +333,7 @@ class GradelevelEnrollmentController {
             
             // Prevent enrollment if no fee structure is found for exact term/year
             if (feeAmount === 0) {
+                await conn.rollback();
                 return res.status(400).json({ 
                     success: false, 
                     error: 'NO_FEE_STRUCTURE',
@@ -349,6 +345,25 @@ class GradelevelEnrollmentController {
                         action: `Create invoice structure for class "${className}" for term "${enrollmentTerm}" and academic year "${enrollmentAcademicYear}"`
                     }
                 });
+            }
+
+            let enrollmentId;
+            try {
+                const [result] = await conn.execute(
+                    'INSERT INTO enrollments_gradelevel_classes (student_regnumber, gradelevel_class_id, status) VALUES (?, ?, ?)',
+                    [student_regnumber, gradelevel_class_id, status]
+                );
+                enrollmentId = result.insertId;
+            } catch (insertError) {
+                // Handle database constraint violation
+                if (insertError.code === 'ER_DUP_ENTRY' || insertError.errno === 1062) {
+                    await conn.rollback();
+                    return res.status(400).json({ 
+                        success: false, 
+                        message: 'Student already has an enrollment. The database constraint prevents duplicate enrollments.' 
+                    });
+                }
+                throw insertError; // Re-throw if it's a different error
             }
             
             // Create DEBIT transaction for enrollment fee
@@ -403,8 +418,8 @@ class GradelevelEnrollmentController {
                     student_regnumber, 
                     gradelevel_class_id, 
                     status,
-                    term,
-                    academic_year
+                    term: enrollmentTerm,
+                    academic_year: enrollmentAcademicYear
                 }
             });
         } catch (error) {

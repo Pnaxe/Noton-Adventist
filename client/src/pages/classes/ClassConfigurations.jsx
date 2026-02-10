@@ -31,8 +31,14 @@ const ClassConfigurations = () => {
 
   // Fetch streams on mount and after adding
   useEffect(() => {
+    if (!token) {
+      setStreams([]);
+      setStreamsError('Missing authentication. Please log in again.');
+      setStreamsLoading(false);
+      return;
+    }
     fetchStreams();
-  }, []);
+  }, [token]);
 
   const fetchStreams = async () => {
     setStreamsLoading(true);
@@ -47,7 +53,7 @@ const ClassConfigurations = () => {
         setStreamsError('Failed to load streams.');
       }
     } catch (err) {
-      setStreamsError('Failed to load streams.');
+      setStreamsError(err.response?.data?.message || 'Failed to load streams.');
     } finally {
       setStreamsLoading(false);
     }
@@ -144,8 +150,14 @@ const ClassConfigurations = () => {
 
   // Fetch subjects on mount and after adding
   useEffect(() => {
+    if (!token) {
+      setSubjects([]);
+      setSubjectsError('Missing authentication. Please log in again.');
+      setSubjectsLoading(false);
+      return;
+    }
     fetchSubjects();
-  }, []);
+  }, [token]);
 
   const fetchSubjects = async () => {
     setSubjectsLoading(true);
@@ -160,7 +172,7 @@ const ClassConfigurations = () => {
         setSubjectsError('Failed to load subjects.');
       }
     } catch (err) {
-      setSubjectsError('Failed to load subjects.');
+      setSubjectsError(err.response?.data?.message || 'Failed to load subjects.');
     } finally {
       setSubjectsLoading(false);
     }

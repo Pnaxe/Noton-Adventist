@@ -33,9 +33,10 @@ const Expenses = () => {
     currency_id: '', 
     expense_date: new Date().toISOString().split('T')[0], 
     description: '', 
-    payment_method: 'Cash', 
+    payment_method: 'cash', 
     payment_status: 'full', 
     expense_account_id: '',
+    payment_account_id: '',
     amount_paid: '',
     reference_number: ''
   });
@@ -44,6 +45,7 @@ const Expenses = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [expenseAccounts, setExpenseAccounts] = useState([]);
+  const [chartAccounts, setChartAccounts] = useState([]);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
   const fetchExpenses = async () => {
@@ -86,6 +88,7 @@ const Expenses = () => {
       setSuppliers(suppliersRes.data.data || []);
       setCurrencies(currenciesRes.data.data || []);
       const accounts = accountsRes.data.data || [];
+      setChartAccounts(accounts);
       setExpenseAccounts(accounts.filter(acc => acc.type === 'Expense'));
     } catch (err) {
       console.error('Error fetching options:', err);
@@ -127,9 +130,10 @@ const Expenses = () => {
       currency_id: '', 
       expense_date: new Date().toISOString().split('T')[0], 
       description: '', 
-      payment_method: 'Cash', 
+      payment_method: 'cash', 
       payment_status: 'full', 
       expense_account_id: '',
+      payment_account_id: '',
       amount_paid: '',
       reference_number: ''
     });
@@ -146,12 +150,28 @@ const Expenses = () => {
       currency_id: '', 
       expense_date: new Date().toISOString().split('T')[0], 
       description: '', 
-      payment_method: 'Cash', 
+      payment_method: 'cash', 
       payment_status: 'full', 
       expense_account_id: '',
+      payment_account_id: '',
       amount_paid: '',
       reference_number: ''
     });
+  };
+
+  const getPaymentAccountOptions = (method) => {
+    if (!method || chartAccounts.length === 0) return [];
+    const isCash = method === 'cash';
+    const preferredCode = isCash ? '1000' : '1010';
+    const parentByCode = chartAccounts.find(acc => acc.code === preferredCode);
+    const parentByName = chartAccounts.find(acc => {
+      const name = (acc.name || '').toLowerCase();
+      return isCash ? name.includes('cash') : name.includes('bank');
+    });
+    const parent = parentByCode || parentByName;
+    if (!parent) return [];
+    const children = chartAccounts.filter(acc => acc.parent_id === parent.id);
+    return children.length > 0 ? children : [parent];
   };
 
   const handleAddSubmit = async (e) => {
@@ -168,6 +188,11 @@ const Expenses = () => {
 
       if (!addForm.reference_number) {
         setAddFormError('Please add a reference number.');
+        setAddFormLoading(false);
+        return;
+      }
+      if (['cash', 'bank'].includes(addForm.payment_method) && !addForm.payment_account_id) {
+        setAddFormError('Please select a payment account.');
         setAddFormLoading(false);
         return;
       }
@@ -192,6 +217,7 @@ const Expenses = () => {
         amount: parseFloat(addForm.amount),
         amount_paid: addForm.payment_status === 'partial' ? parseFloat(addForm.amount_paid) : null,
         expense_account_id: addForm.expense_account_id,
+        payment_account_id: addForm.payment_account_id || null,
         reference_number: addForm.reference_number
       }, { headers: { Authorization: `Bearer ${token}` } });
       
@@ -854,16 +880,38 @@ const Expenses = () => {
                             name="payment_method"
                             className="form-control"
                             value={addForm.payment_method}
-                            onChange={handleAddFormChange}
+                            onChange={(e) => {
+                              handleAddFormChange(e);
+                              setAddForm(prev => ({ ...prev, payment_account_id: '' }));
+                            }}
                             required
                           >
-                            <option value="Cash">Cash</option>
-                            <option value="Bank Transfer">Bank Transfer</option>
-                            <option value="Cheque">Cheque</option>
-                            <option value="Mobile Money">Mobile Money</option>
-                            <option value="Other">Other</option>
+                            <option value="cash">Cash</option>
+                            <option value="bank">Bank</option>
                           </select>
                         </div>
+                        {['cash', 'bank'].includes(addForm.payment_method) && (
+                          <div className="form-group">
+                            <label className="form-label">
+                              Payment Account <span className="required">*</span>
+                            </label>
+                            <select
+                              name="payment_account_id"
+                              className="form-control"
+                              value={addForm.payment_account_id}
+                              onChange={handleAddFormChange}
+                              required
+                              disabled={loadingOptions}
+                            >
+                              <option value="">{loadingOptions ? 'Loading accounts...' : 'Select Account'}</option>
+                              {getPaymentAccountOptions(addForm.payment_method).map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.code} - {account.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                         <div className="form-group">
                           <label className="form-label">
                             Payment Status <span className="required">*</span>

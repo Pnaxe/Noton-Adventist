@@ -20,6 +20,9 @@ router.get('/:id', requireRole('STUDENT_BILLING'), feePaymentController.getPayme
 router.get('/student/:student_reg_number', requireRole('STUDENT_BILLING'), feePaymentController.getPaymentsByStudent);
 router.post('/:id/refund', requireRole('STUDENT_BILLING'), feePaymentController.refundPayment);
 router.get('/student/:student_reg_number/summary', requireRole('STUDENT_BILLING'), feePaymentController.getPaymentSummary);
+// Rely on controller's sysadmin check to allow only sysadmin username
+router.put('/:id', feePaymentController.updatePayment);
+router.delete('/:id', feePaymentController.deletePayment);
 
 // Receipt generation route
 router.get('/:id/receipt', requireRole(['STUDENT_BILLING', 'ACCOUNTING_MANAGEMENT', 'ACCOUNTING_VIEW', 'ADMIN']), async (req, res, next) => {

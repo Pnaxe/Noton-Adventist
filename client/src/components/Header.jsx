@@ -141,6 +141,12 @@ const Header = ({ onMenuClick }) => {
     if (location.pathname.startsWith('/dashboard/accounting')) {
       return 'chart-of-accounts';
     } else if (location.pathname.startsWith('/dashboard/expenses')) {
+      if (location.pathname.startsWith('/dashboard/expenses/accounts-payable')) {
+        return 'liabilities';
+      }
+      if (location.pathname.startsWith('/dashboard/expenses/suppliers')) {
+        return 'suppliers';
+      }
       return 'expenses';
     } else if (location.pathname.startsWith('/dashboard/assets')) {
       return 'fixed-assets';
@@ -196,7 +202,7 @@ const Header = ({ onMenuClick }) => {
   };
 
   return (
-    <nav className="top-nav-bar">
+    <nav className={`top-nav-bar ${isBillingPage ? 'top-nav-bar--with-tabs' : ''}`}>
       <div className="top-nav-content">
         {/* Left - Menu Button (Mobile) & Logo */}
         <div className="top-nav-left flex items-center gap-4">
@@ -208,14 +214,18 @@ const Header = ({ onMenuClick }) => {
             <span className="sr-only">Open sidebar</span>
             <FontAwesomeIcon icon={faBars} className="h-6 w-6" aria-hidden="true" />
           </button>
-          <img src={logo} alt="Logo" className="top-nav-logo" />
-          <span className="hidden md:inline" style={{
-            fontSize: '1rem',
-            fontWeight: 'bold',
-            color: 'var(--text-primary)',
-            marginLeft: '4px',
-            whiteSpace: 'nowrap'
-          }}>Norton Adventist</span>
+          {!isAccountingPage && (
+            <>
+              <img src={logo} alt="Logo" className="top-nav-logo" />
+              <span className="hidden md:inline" style={{
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                color: 'var(--text-primary)',
+                marginLeft: '4px',
+                whiteSpace: 'nowrap'
+              }}>Norton Adventist</span>
+            </>
+          )}
         </div>
 
         {/* Center - Sports Navigation Menu */}
@@ -287,6 +297,8 @@ const Header = ({ onMenuClick }) => {
             {[
               { id: 'chart-of-accounts', label: 'Chart of Accounts', icon: faMoneyBillWave, path: '/dashboard/accounting/chart-of-accounts' },
               { id: 'expenses', label: 'Expenses', icon: faShoppingCart, path: '/dashboard/expenses/expenses' },
+              { id: 'liabilities', label: 'Liabilities', icon: faBalanceScale, path: '/dashboard/expenses/accounts-payable' },
+              { id: 'suppliers', label: 'Suppliers', icon: faUserPlus, path: '/dashboard/expenses/suppliers' },
               { id: 'fixed-assets', label: 'Fixed Assets', icon: faWarehouse, path: '/dashboard/assets' },
               { id: 'financial-reports', label: 'Financial Reports', icon: faChartLine, path: '/dashboard/reports/income-statement' }
             ].map(tab => (
@@ -339,67 +351,6 @@ const Header = ({ onMenuClick }) => {
         {isInventoryPage && (
           <div className="top-nav-center">
             {/* Empty when on inventory page */}
-          </div>
-        )}
-        {isBillingPage && (
-          <div className="top-nav-center" style={{
-            position: 'absolute',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0'
-          }}>
-            {[
-              { id: 'record-payment', label: 'Record Payment', icon: faMoneyBillWave },
-              { id: 'outstanding-balance', label: 'Outstanding Balance', icon: faBalanceScale },
-              { id: 'opening-balance', label: 'Student Opening Balance', icon: faHistory },
-              { id: 'waivers', label: 'Waivers', icon: faHandHoldingUsd },
-              { id: 'invoice-structures', label: 'Invoice Structures', icon: faFileContract }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  if (onBillingTabChange) {
-                    onBillingTabChange(tab.id);
-                  }
-                }}
-                className={`top-nav-menu-item ${activeBillingTab === tab.id ? 'active' : ''}`}
-                style={{
-                  padding: '12px 20px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                  color: activeBillingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
-                  borderBottom: activeBillingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                  transition: 'all 0.2s',
-                  whiteSpace: 'nowrap',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                  background: 'transparent',
-                  borderTop: 'none',
-                  borderLeft: 'none',
-                  borderRight: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-                onMouseEnter={(e) => {
-                  if (activeBillingTab !== tab.id) {
-                    e.currentTarget.style.color = 'var(--text-primary)';
-                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeBillingTab !== tab.id) {
-                    e.currentTarget.style.color = 'var(--text-secondary)';
-                    e.currentTarget.style.background = 'transparent';
-                  }
-                }}
-              >
-                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
-                {tab.label}
-              </button>
-            ))}
           </div>
         )}
         {isBoardingPage && (
@@ -585,6 +536,63 @@ const Header = ({ onMenuClick }) => {
           </div>
         </div>
       </div>
+      {isBillingPage && (
+        <div className="billing-tabs-row">
+          <div className="billing-tabs">
+            {[
+              { id: 'record-payment', label: 'Record Payment', icon: faMoneyBillWave },
+              { id: 'outstanding-balance', label: 'Outstanding Balance', icon: faBalanceScale },
+              { id: 'opening-balance', label: 'Student Opening Balance', icon: faHistory },
+              { id: 'waivers', label: 'Waivers', icon: faHandHoldingUsd },
+              { id: 'financial-record', label: 'Student Financial', icon: faFileInvoiceDollar },
+              { id: 'invoice-structures', label: 'Invoice Structures', icon: faFileContract }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  if (onBillingTabChange) {
+                    onBillingTabChange(tab.id);
+                  }
+                }}
+                className={`top-nav-menu-item ${activeBillingTab === tab.id ? 'active' : ''}`}
+                style={{
+                  padding: '12px 20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: activeBillingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
+                  borderBottom: activeBillingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeBillingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeBillingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </nav>
   );
 };
