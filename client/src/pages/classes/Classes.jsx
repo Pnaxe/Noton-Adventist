@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useNavigate } from 'react-router-dom';
-import { 
-  faUsers, 
+import {
+  faUsers,
   faPlus,
   faSearch,
   faEye,
@@ -46,12 +46,12 @@ const Classes = () => {
     capacity: '',
     homeroom_teacher_employee_number: ''
   });
-  
+
   // Toast states
   const [toast, setToast] = useState({ message: null, type: 'success', visible: false });
-  
+
   // View modal states removed (navigate to page instead)
-  
+
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalLoading, setEditModalLoading] = useState(false);
@@ -64,7 +64,7 @@ const Classes = () => {
   });
   const [editFormError, setEditFormError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Delete modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [classToDelete, setClassToDelete] = useState(null);
@@ -74,10 +74,7 @@ const Classes = () => {
   const [streams, setStreams] = useState([]);
   const [teachers, setTeachers] = useState([]);
 
-  // Active tab state
-  const [activeTab, setActiveTab] = useState('classes'); // 'classes', 'term-year', 'configurations', 'close-term'
-
-  // Class Term Year states
+  // Class Term Year states (used by modals; main UI for term-year/config/close-term is on separate routes)
   const [classTermYears, setClassTermYears] = useState([]);
   const [classTermYearLoading, setClassTermYearLoading] = useState(false);
   const [showBulkTermYearModal, setShowBulkTermYearModal] = useState(false);
@@ -117,22 +114,7 @@ const Classes = () => {
     fetchTeachers();
   }, [currentPage, activeSearchTerm]);
 
-  // Fetch class term years when term-year tab is active
-  useEffect(() => {
-    if (activeTab === 'term-year') {
-      fetchClassTermYears();
-    }
-  }, [activeTab]);
-
-  // Fetch configurations data when configuration tab is active
-  useEffect(() => {
-    if (activeTab === 'configurations') {
-      fetchStreams();
-      fetchSubjects();
-    }
-  }, [activeTab, token]);
-
-  // Note: class view is now a dedicated page, not a modal
+  // Note: class view is now a dedicated page, not a modal. Class Term Year, Configurations, Close to Term are separate routes.
 
   const fetchStreams = async () => {
     try {
@@ -175,13 +157,13 @@ const Classes = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Check if we're searching
       if (activeSearchTerm && activeSearchTerm.trim() !== '') {
         console.log('🔍 Searching for:', activeSearchTerm);
         // Search mode - no pagination
         const response = await axios.get(`${BASE_URL}/classes/gradelevel-classes/search`, {
-          params: { 
+          params: {
             search: activeSearchTerm.trim()
           },
           headers: {
@@ -208,13 +190,13 @@ const Classes = () => {
         const data = response.data;
         console.log('📊 Raw response:', data);
         const allClasses = data.data || [];
-        
+
         // Client-side pagination
         const startIndex = (currentPage - 1) * limit;
         const endIndex = startIndex + limit;
         const paginatedClasses = allClasses.slice(startIndex, endIndex);
         const totalPages = Math.ceil(allClasses.length / limit);
-        
+
         setGradelevelClasses(paginatedClasses);
         setTotalPages(totalPages);
         setTotalClasses(allClasses.length);
@@ -287,14 +269,14 @@ const Classes = () => {
       });
 
       await fetchGradelevelClasses();
-      
+
       const className = formData.name;
       showToast(`Class ${className} has been successfully added!`, 'success');
       handleCloseModal();
     } catch (err) {
       console.error('Error adding class:', err);
       let errorMessage = 'An unexpected error occurred';
-      
+
       if (err.response) {
         const errorData = err.response.data;
         if (errorData?.error) {
@@ -307,7 +289,7 @@ const Classes = () => {
       } else {
         errorMessage = err.message || 'An unexpected error occurred';
       }
-      
+
       setFormError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -341,7 +323,7 @@ const Classes = () => {
       });
 
       const classData = response.data.data;
-      
+
       setEditFormData({
         id: classData.id || '',
         name: classData.name || '',
@@ -395,7 +377,7 @@ const Classes = () => {
     } catch (err) {
       console.error('Error updating class:', err);
       let errorMessage = 'An unexpected error occurred';
-      
+
       if (err.response) {
         const errorData = err.response.data;
         if (errorData?.error) {
@@ -408,7 +390,7 @@ const Classes = () => {
       } else {
         errorMessage = err.message || 'An unexpected error occurred';
       }
-      
+
       setEditFormError(errorMessage);
     } finally {
       setIsSaving(false);
@@ -452,13 +434,13 @@ const Classes = () => {
     } catch (err) {
       console.error('Error deleting class:', err);
       let errorMessage = 'Failed to delete class';
-      
+
       if (err.response) {
         errorMessage = err.response.data?.message || `Server Error (${err.response.status})`;
       } else if (err.request) {
         errorMessage = 'No response from server. Please check your internet connection.';
       }
-      
+
       showToast(errorMessage, 'error');
     } finally {
       setIsDeleting(false);
@@ -468,7 +450,7 @@ const Classes = () => {
   // Toast functions
   const showToast = (message, type = 'success', duration = 3000) => {
     setToast({ message, type, visible: true });
-    
+
     if (duration > 0) {
       setTimeout(() => {
         setToast(prev => ({ ...prev, visible: false }));
@@ -721,16 +703,16 @@ const Classes = () => {
       setCloseTermError('');
       setCloseTermSuccess('');
       const response = await axios.post(`${BASE_URL}/close-to-term/close-to-term`, {}, {
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-        if (response.data.success) {
-          setCloseTermSuccess(`Close to Term completed successfully! ${response.data.data.closed_count} enrollments closed.`);
-        } else {
-          setCloseTermError(response.data?.message || 'Failed to close term');
-        }
+      if (response.data.success) {
+        setCloseTermSuccess(`Close to Term completed successfully! ${response.data.data.closed_count} enrollments closed.`);
+      } else {
+        setCloseTermError(response.data?.message || 'Failed to close term');
+      }
     } catch (err) {
       setCloseTermError(err.response?.data?.message || 'Failed to close term');
     } finally {
@@ -751,22 +733,14 @@ const Classes = () => {
   const displayEnd = Math.min(currentPage * limit, totalClasses);
   const hasData = gradelevelClasses.length > 0;
 
-  // Tabs configuration
-  const tabs = [
-    { id: 'classes', name: 'Classes', icon: faSchool },
-    { id: 'term-year', name: 'Class Term Year', icon: faCalendarAlt },
-    { id: 'configurations', name: 'Class Configurations', icon: faCog },
-    { id: 'close-term', name: 'Close to Term', icon: faLock }
-  ];
-
   return (
-    <div className="reports-container" style={{ 
-      height: '100%', 
-      maxHeight: '100%', 
-      overflow: 'hidden', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      position: 'relative' 
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
     }}>
       {/* Report Header */}
       <div className="report-header" style={{ flexShrink: 0 }}>
@@ -775,103 +749,59 @@ const Classes = () => {
           <p className="report-subtitle">Manage grade-level classes and student enrollments.</p>
         </div>
         <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {activeTab === 'classes' && (
-          <button
+            <button
               onClick={() => setShowAddGradelevelClassModal(true)}
-            className="btn-checklist"
-          >
-            <FontAwesomeIcon icon={faPlus} />
+              className="btn-checklist"
+            >
+              <FontAwesomeIcon icon={faPlus} />
               Add Grade Level Class
-          </button>
-          )}
+            </button>
         </div>
       </div>
 
-      {/* Filters and Tabs Section */}
+      {/* Filters Section - match Students page */}
       <div className="report-filters" style={{ flexShrink: 0 }}>
-        <div className="report-filters-left" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          {/* Tabs */}
-          <div className="filter-group" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  border: `1px solid ${activeTab === tab.id ? '#2563eb' : 'var(--border-color)'}`,
-                  borderRadius: '4px',
-                  background: activeTab === tab.id ? '#2563eb' : 'transparent',
-                  color: activeTab === tab.id ? 'white' : 'var(--text-primary)',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  if (activeTab !== tab.id) {
-                    e.currentTarget.style.background = '#f3f4f6';
-                    e.currentTarget.style.borderColor = '#d1d5db';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeTab !== tab.id) {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.borderColor = 'var(--border-color)';
-                  }
-                }}
-              >
-                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.7rem' }} />
-                <span>{tab.name}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Search Bar - Only show for classes tab */}
-          {activeTab === 'classes' && (
-            <form onSubmit={handleSearch} className="filter-group" style={{ marginLeft: 'auto' }}>
-            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <FontAwesomeIcon icon={faSearch} className="search-icon" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by class name or stream name..."
-                className="filter-input search-input"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setActiveSearchTerm('');
-                    setCurrentPage(1);
-                  }}
-                  style={{
-                    position: 'absolute',
-                    right: '8px',
-                    padding: '4px 6px',
-                    background: 'transparent',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '1rem',
-                    color: 'var(--text-secondary)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '20px',
-                    height: '20px'
-                  }}
-                  title="Clear search"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          </form>
-          )}
+        <div className="report-filters-left">
+          <form onSubmit={handleSearch} className="filter-group">
+              <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <FontAwesomeIcon icon={faSearch} className="search-icon" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search by class name or stream name..."
+                  className="filter-input search-input"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setActiveSearchTerm('');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      padding: '4px 6px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '20px',
+                      height: '20px'
+                    }}
+                    title="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </form>
         </div>
       </div>
 
@@ -882,206 +812,105 @@ const Classes = () => {
         </div>
       )}
 
-      {/* Content Container */}
-      <div className="report-content-container" style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        flex: 1, 
-        overflow: 'auto', 
-        minHeight: 0,
-        padding: activeTab === 'classes' ? '0' : '20px 30px'
-      }}>
-        {/* Classes Tab */}
-        {activeTab === 'classes' && (
-          <div className="ecl-table-container" style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        flex: 1, 
-        overflow: 'auto', 
-        minHeight: 0,
-        padding: 0,
-        height: '100%'
-      }}>
-        {loading && gradelevelClasses.length === 0 ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '200px',
-              gap: '16px'
-            }}
-          >
-            <div className="loading-spinner"></div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading classes...</p>
-          </div>
-        ) : (
-          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-            <thead style={{ 
-              position: 'sticky', 
-              top: 0, 
-              zIndex: 10, 
-              background: 'var(--sidebar-bg)' 
-            }}>
-              <tr>
-                <th style={{ padding: '6px 10px' }}>CLASS NAME</th>
-                <th style={{ padding: '6px 10px' }}>STREAM</th>
-                <th style={{ padding: '6px 10px' }}>STAGE</th>
-                <th style={{ padding: '6px 10px' }}>TEACHER</th>
-                <th style={{ padding: '6px 10px' }}>CAPACITY</th>
-                <th style={{ padding: '6px 10px' }}>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {gradelevelClasses.map((classItem, index) => (
-                <tr 
-                  key={classItem.id} 
-                  style={{ 
-                    height: '32px', 
-                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
-                  }}
-                >
-                  <td style={{ padding: '4px 10px' }}>
-                    {classItem.name}
-                  </td>
-                  <td style={{ padding: '4px 10px' }}>
-                    {classItem.stream_name || 'N/A'}
-                  </td>
-                  <td style={{ padding: '4px 10px' }}>
-                    {classItem.stream_stage || 'N/A'}
-                  </td>
-                  <td style={{ padding: '4px 10px' }}>
-                    {classItem.teacher_name || 'Not Assigned'}
-                  </td>
-                  <td style={{ padding: '4px 10px' }}>
-                    {classItem.capacity || 'Unlimited'}
-                  </td>
-                  <td style={{ padding: '4px 10px' }}>
-                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                      <button
-                        onClick={() => handleViewClass(classItem.id)}
-                        style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        title="View"
-                      >
-                        <FontAwesomeIcon icon={faEye} />
-                      </button>
-                      <button
-                        onClick={() => handleEditClass(classItem.id)}
-                        style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        title="Edit"
-                      >
-                        <FontAwesomeIcon icon={faEdit} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(classItem)}
-                        style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                        title="Delete"
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {/* Empty placeholder rows to always show 25 rows */}
-              {Array.from({ length: Math.max(0, 25 - gradelevelClasses.length) }).map((_, index) => (
-                <tr 
-                  key={`empty-${index}`}
-                  style={{ 
-                    height: '32px', 
-                    backgroundColor: (gradelevelClasses.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6' 
-                  }}
-                >
-                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-        )}
-
-
-        {/* Class Term Year Tab */}
-        {activeTab === 'term-year' && (
-          <div className="ecl-table-container" style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            flex: 1, 
-            overflow: 'auto', 
+      {/* Table Container - match Students page */}
+      <div className="report-content-container ecl-table-container" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
+            overflow: 'auto',
             minHeight: 0,
             padding: 0,
             height: '100%'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0 16px 0', flexShrink: 0 }}>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                Class Term Year Management
-              </h3>
-              <button
-                onClick={() => setShowBulkTermYearModal(true)}
-                className="btn-checklist"
-                style={{ fontSize: '0.7rem', padding: '6px 12px' }}
+            {loading && gradelevelClasses.length === 0 ? (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '200px',
+                  gap: '16px'
+                }}
               >
-                <FontAwesomeIcon icon={faPlay} style={{ marginRight: '4px', fontSize: '0.7rem' }} />
-                Bulk Populate
-              </button>
-            </div>
-
-            {classTermYearLoading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px', color: '#64748b' }}>
-                Loading class term years...
-              </div>
-            ) : classTermYears.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#64748b', fontSize: '0.75rem' }}>
-                No class term year records found. Use "Bulk Populate" to create records.
+                <div className="loading-spinner"></div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading classes...</p>
               </div>
             ) : (
               <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                <thead style={{ 
-                  position: 'sticky', 
-                  top: 0, 
-                  zIndex: 10, 
-                  background: 'var(--sidebar-bg)' 
+                <thead style={{
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 10,
+                  background: 'var(--sidebar-bg)'
                 }}>
                   <tr>
                     <th style={{ padding: '6px 10px' }}>CLASS NAME</th>
                     <th style={{ padding: '6px 10px' }}>STREAM</th>
-                    <th style={{ padding: '6px 10px' }}>TERM</th>
-                    <th style={{ padding: '6px 10px' }}>ACADEMIC YEAR</th>
-                    <th style={{ padding: '6px 10px' }}>START DATE</th>
-                    <th style={{ padding: '6px 10px' }}>END DATE</th>
+                    <th style={{ padding: '6px 10px' }}>STAGE</th>
+                    <th style={{ padding: '6px 10px' }}>TEACHER</th>
+                    <th style={{ padding: '6px 10px' }}>CAPACITY</th>
+                    <th style={{ padding: '6px 10px' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {classTermYears.map((record, index) => (
-                    <tr 
-                      key={record.id} 
-                      style={{ 
-                        height: '32px', 
-                        backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                  {gradelevelClasses.map((classItem, index) => (
+                    <tr
+                      key={classItem.id}
+                      style={{
+                        height: '32px',
+                        backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
                       }}
                     >
-                      <td style={{ padding: '4px 10px' }}>{record.class_name || 'N/A'}</td>
-                      <td style={{ padding: '4px 10px' }}>{record.stream_name || 'N/A'}</td>
-                      <td style={{ padding: '4px 10px' }}>Term {record.term}</td>
-                      <td style={{ padding: '4px 10px' }}>{record.academic_year}</td>
-                      <td style={{ padding: '4px 10px' }}>{record.start_date ? new Date(record.start_date).toLocaleDateString() : 'N/A'}</td>
-                      <td style={{ padding: '4px 10px' }}>{record.end_date ? new Date(record.end_date).toLocaleDateString() : 'N/A'}</td>
+                      <td style={{ padding: '4px 10px' }}>
+                        {classItem.name}
+                      </td>
+                      <td style={{ padding: '4px 10px' }}>
+                        {classItem.stream_name || 'N/A'}
+                      </td>
+                      <td style={{ padding: '4px 10px' }}>
+                        {classItem.stream_stage || 'N/A'}
+                      </td>
+                      <td style={{ padding: '4px 10px' }}>
+                        {classItem.teacher_name || 'Not Assigned'}
+                      </td>
+                      <td style={{ padding: '4px 10px' }}>
+                        {classItem.capacity || 'Unlimited'}
+                      </td>
+                      <td style={{ padding: '4px 10px' }}>
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <button
+                            onClick={() => handleViewClass(classItem.id)}
+                            style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="View"
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
+                          <button
+                            onClick={() => handleEditClass(classItem.id)}
+                            style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Edit"
+                          >
+                            <FontAwesomeIcon icon={faEdit} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(classItem)}
+                            style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                            title="Delete"
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {/* Empty placeholder rows to always show 25 rows */}
-                  {Array.from({ length: Math.max(0, 25 - classTermYears.length) }).map((_, index) => (
-                    <tr 
+                  {Array.from({ length: Math.max(0, 25 - gradelevelClasses.length) }).map((_, index) => (
+                    <tr
                       key={`empty-${index}`}
-                      style={{ 
-                        height: '32px', 
-                        backgroundColor: (classTermYears.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                      style={{
+                        height: '32px',
+                        backgroundColor: (gradelevelClasses.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
                       }}
                     >
                       <td style={{ padding: '4px 10px' }}>&nbsp;</td>
@@ -1095,500 +924,50 @@ const Classes = () => {
                 </tbody>
               </table>
             )}
+
+            </div>
+
+      {/* Pagination Footer */}
+        <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+          <div className="table-footer-left">
+            Showing {displayStart} to {displayEnd} of {totalClasses || 0} results.
           </div>
-        )}
-
-        {/* Class Configurations Tab */}
-        {activeTab === 'configurations' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {/* Add Stream Section */}
-            <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FontAwesomeIcon icon={faUsers} style={{ color: '#2563eb' }} />
-                Add New Stream
-              </h3>
-              <form onSubmit={handleAddStream} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Stream Name <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={streamForm.name}
-                    onChange={(e) => setStreamForm({ ...streamForm, name: e.target.value })}
-                    className="form-control"
-                    placeholder="e.g., Grade 1, Form 2"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Stage <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    name="stage"
-                    value={streamForm.stage}
-                    onChange={(e) => setStreamForm({ ...streamForm, stage: e.target.value })}
-                    className="form-control"
-                    placeholder="e.g., Primary, Secondary"
-                    required
-                  />
-                </div>
-                <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button
-                    type="submit"
-                    className="modal-btn modal-btn-confirm"
-                    disabled={streamLoading}
-                    style={{ width: '100%' }}
-                  >
-                    {streamLoading ? 'Adding...' : 'Add Stream'}
-                  </button>
-                </div>
-              </form>
-              {(streamError || streamSuccess) && (
-                <div style={{ 
-                  padding: '10px', 
-                  background: streamError ? '#fee2e2' : '#d1fae5', 
-                  color: streamError ? '#dc2626' : '#065f46', 
-                  fontSize: '0.75rem', 
-                  borderRadius: '4px',
-                  marginBottom: '16px'
-                }}>
-                  {streamError || streamSuccess}
-                </div>
-              )}
-            </div>
-
-            {/* Add Subject Section */}
-            <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FontAwesomeIcon icon={faSchool} style={{ color: '#2563eb' }} />
-                Add New Subject
-              </h3>
-              <form onSubmit={handleAddSubject} style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Subject Code <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    name="code"
-                    value={subjectForm.code}
-                    onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
-                    className="form-control"
-                    placeholder="e.g., ENG101"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Subject Name <span className="required">*</span></label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={subjectForm.name}
-                    onChange={(e) => setSubjectForm({ ...subjectForm, name: e.target.value })}
-                    className="form-control"
-                    placeholder="e.g., English Language"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Syllabus</label>
-                  <input
-                    type="text"
-                    name="syllabus"
-                    value={subjectForm.syllabus}
-                    onChange={(e) => setSubjectForm({ ...subjectForm, syllabus: e.target.value })}
-                    className="form-control"
-                    placeholder="e.g., ZIMSEC, Cambridge"
-                  />
-                </div>
-                <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button
-                    type="submit"
-                    className="modal-btn modal-btn-confirm"
-                    disabled={subjectLoading}
-                    style={{ width: '100%' }}
-                  >
-                    {subjectLoading ? 'Adding...' : 'Add Subject'}
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            {/* Existing Streams */}
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                  Existing Streams
-                </h3>
-                {streams.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearUnusedStreams}
-                    disabled={clearStreamsLoading}
-                    style={{
-                      padding: '6px 12px',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      color: '#b91c1c',
-                      background: '#fef2f2',
-                      border: '1px solid #fecaca',
-                      borderRadius: '6px',
-                      cursor: clearStreamsLoading ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {clearStreamsLoading ? 'Clearing...' : 'Clear unused streams'}
-                  </button>
-                )}
-              </div>
-              {streams.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
-                  No streams yet. By default streams are empty (like subjects). Add streams using the form above to get started.
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                    <thead style={{ background: 'var(--sidebar-bg)' }}>
-                      <tr>
-                        <th style={{ padding: '6px 10px' }}>STREAM NAME</th>
-                        <th style={{ padding: '6px 10px' }}>STAGE</th>
-                        <th style={{ padding: '6px 10px' }}>ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {streams.map((stream, index) => (
-                        <tr 
-                          key={stream.id}
-                          style={{ 
-                            height: '32px', 
-                            backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
-                          }}
-                        >
-                          {editingStreamId === stream.id ? (
-                            <>
-                              <td style={{ padding: '4px 10px' }}>
-                                <input
-                                  type="text"
-                                  value={editStreamForm.name}
-                                  onChange={(e) => setEditStreamForm({ ...editStreamForm, name: e.target.value })}
-                                  className="form-control"
-                                  style={{ width: '100%' }}
-                                />
-                              </td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <input
-                                  type="text"
-                                  value={editStreamForm.stage}
-                                  onChange={(e) => setEditStreamForm({ ...editStreamForm, stage: e.target.value })}
-                                  className="form-control"
-                                  style={{ width: '100%' }}
-                                />
-                              </td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button
-                                    onClick={() => {
-                                      axios.put(`${BASE_URL}/classes/streams/${stream.id}`, editStreamForm, {
-                                        headers: { Authorization: `Bearer ${token}` }
-                                      }).then(() => {
-                                        setEditingStreamId(null);
-                                        fetchStreams();
-                                        showToast('Stream updated successfully!', 'success');
-                                      }).catch(() => showToast('Failed to update stream', 'error'));
-                                    }}
-                                    className="modal-btn modal-btn-confirm"
-                                    style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                                  >
-                                    <FontAwesomeIcon icon={faSave} />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingStreamId(null)}
-                                    className="modal-btn modal-btn-cancel"
-                                    style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                                  >
-                                    <FontAwesomeIcon icon={faTimes} />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td style={{ padding: '4px 10px' }}>{stream.name}</td>
-                              <td style={{ padding: '4px 10px' }}>{stream.stage}</td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button
-                                    onClick={() => {
-                                      setEditingStreamId(stream.id);
-                                      setEditStreamForm({ name: stream.name, stage: stream.stage });
-                                    }}
-                                    style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                                    title="Edit"
-                                  >
-                                    <FontAwesomeIcon icon={faEdit} />
-                                  </button>
-                                  <button
-                                    onClick={() => setStreamToDelete(stream)}
-                                    style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                                    title="Delete"
-                                  >
-                                    <FontAwesomeIcon icon={faTrash} />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Existing Subjects */}
-            <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>
-                Existing Subjects
-              </h3>
-              {subjects.length === 0 ? (
-                <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '0.875rem' }}>
-                  No subjects yet. By default subjects are empty (like streams). Add subjects using the form above to get started.
-                </div>
-              ) : (
-                <div style={{ border: '1px solid var(--border-color)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                    <thead style={{ background: 'var(--sidebar-bg)' }}>
-                      <tr>
-                        <th style={{ padding: '6px 10px' }}>SUBJECT NAME</th>
-                        <th style={{ padding: '6px 10px' }}>CODE</th>
-                        <th style={{ padding: '6px 10px' }}>SYLLABUS</th>
-                        <th style={{ padding: '6px 10px' }}>ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {subjects.map((subject, index) => (
-                        <tr 
-                          key={subject.id}
-                          style={{ 
-                            height: '32px', 
-                            backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
-                          }}
-                        >
-                          {editingSubjectId === subject.id ? (
-                            <>
-                              <td style={{ padding: '4px 10px' }}>
-                                <input
-                                  type="text"
-                                  value={editSubjectForm.name}
-                                  onChange={(e) => setEditSubjectForm(prev => ({ ...prev, name: e.target.value }))}
-                                  className="form-control"
-                                  style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem' }}
-                                />
-                              </td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <input
-                                  type="text"
-                                  value={editSubjectForm.code}
-                                  onChange={(e) => setEditSubjectForm(prev => ({ ...prev, code: e.target.value }))}
-                                  className="form-control"
-                                  style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem', fontFamily: 'monospace' }}
-                                />
-                              </td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <input
-                                  type="text"
-                                  value={editSubjectForm.syllabus || ''}
-                                  onChange={(e) => setEditSubjectForm(prev => ({ ...prev, syllabus: e.target.value }))}
-                                  className="form-control"
-                                  style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem' }}
-                                  placeholder="Optional"
-                                />
-                              </td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button
-                                    onClick={() => {
-                                      axios.put(`${BASE_URL}/classes/subjects/${subject.id}`, editSubjectForm, {
-                                        headers: { Authorization: `Bearer ${token}` }
-                                      }).then(() => {
-                                        setEditingSubjectId(null);
-                                        fetchSubjects();
-                                        showToast('Subject updated successfully!', 'success');
-                                      }).catch(() => showToast('Failed to update subject', 'error'));
-                                    }}
-                                    className="modal-btn modal-btn-confirm"
-                                    style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                                  >
-                                    <FontAwesomeIcon icon={faSave} />
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingSubjectId(null)}
-                                    className="modal-btn modal-btn-cancel"
-                                    style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                                  >
-                                    <FontAwesomeIcon icon={faTimes} />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td style={{ padding: '4px 10px' }}>{subject.name}</td>
-                              <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{subject.code}</td>
-                              <td style={{ padding: '4px 10px' }}>{subject.syllabus || '-'}</td>
-                              <td style={{ padding: '4px 10px' }}>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                  <button
-                                    onClick={() => {
-                                      setEditingSubjectId(subject.id);
-                                      setEditSubjectForm({ code: subject.code, name: subject.name, syllabus: subject.syllabus || '' });
-                                    }}
-                                    style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                                    title="Edit"
-                                  >
-                                    <FontAwesomeIcon icon={faEdit} />
-                                  </button>
-                                  <button
-                                    onClick={() => setSubjectToDelete(subject)}
-                                    style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                                    title="Delete"
-                                  >
-                                    <FontAwesomeIcon icon={faTrash} />
-                                  </button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Close to Term Tab */}
-        {activeTab === 'close-term' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ borderBottom: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', gap: '16px' }}>
-                <div
-                  style={{
-                    padding: '8px 16px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    borderBottom: '2px solid #2563eb',
-                    color: '#2563eb'
-                  }}
-                >
-                  Close to Term
-                </div>
-              </div>
-            </div>
-
-            {closeTermError && (
-              <div style={{ 
-                padding: '10px', 
-                background: '#fee2e2', 
-                border: '1px solid #fecaca', 
-                color: '#dc2626', 
-                fontSize: '0.75rem', 
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <FontAwesomeIcon icon={faTimes} style={{ fontSize: '0.7rem' }} />
-                {closeTermError}
-              </div>
-            )}
-
-            {closeTermSuccess && (
-              <div style={{ 
-                padding: '10px', 
-                background: '#d1fae5', 
-                border: '1px solid #a7f3d0', 
-                color: '#065f46', 
-                fontSize: '0.75rem', 
-                borderRadius: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <FontAwesomeIcon icon={faSave} style={{ fontSize: '0.7rem' }} />
-                {closeTermSuccess}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ background: '#f9fafb', padding: '16px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-                  Close Current Term
-                </h4>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                  This will de-enroll all students from their current classes. This action cannot be undone.
-                </p>
+          <div className="table-footer-right">
+            {!activeSearchTerm && totalPages > 1 && (
+              <div className="pagination-controls">
                 <button
-                  onClick={() => {
-                    if (window.confirm('Are you sure you want to close the current term? This will de-enroll all students.')) {
-                      handleCloseToTerm();
-                    }
-                  }}
-                  className="modal-btn modal-btn-delete"
-                  disabled={closeTermLoading}
-                  style={{ padding: '8px 16px' }}
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
                 >
-                  {closeTermLoading ? 'Closing...' : 'Close to Term'}
+                  Previous
+                </button>
+                <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
                 </button>
               </div>
-            </div>
+            )}
+            {!activeSearchTerm && totalPages <= 1 && (
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                All data displayed
+              </div>
+            )}
           </div>
-        )}
-      </div>
-
-      {/* Pagination Footer - Only for Classes tab */}
-      {activeTab === 'classes' && (
-      <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
-        <div className="table-footer-left">
-          Showing {displayStart} to {displayEnd} of {totalClasses || 0} results.
         </div>
-        <div className="table-footer-right">
-          {!activeSearchTerm && totalPages > 1 && (
-            <div className="pagination-controls">
-              <button
-                className="pagination-btn"
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                className="pagination-btn"
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
-            </div>
-          )}
-          {!activeSearchTerm && totalPages <= 1 && (
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-              All data displayed
-            </div>
-          )}
-        </div>
-      </div>
-      )}
 
       {/* Add Class Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={handleCloseModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '600px', minHeight: isLoading ? '400px' : 'auto' }}
           >
             {isLoading ? (
@@ -1619,14 +998,14 @@ const Classes = () => {
                     </svg>
                   </button>
                 </div>
-                
+
                 <div className="modal-body">
                   {formError && (
                     <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
                       {formError}
                     </div>
                   )}
-                  
+
                   <form onSubmit={handleSave} className="modal-form">
                     <div className="form-group">
                       <label className="form-label">
@@ -1642,7 +1021,7 @@ const Classes = () => {
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">
                         Stream <span className="required">*</span>
@@ -1662,7 +1041,7 @@ const Classes = () => {
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">Capacity</label>
                       <input
@@ -1675,7 +1054,7 @@ const Classes = () => {
                         min="1"
                       />
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">Homeroom Teacher</label>
                       <select
@@ -1694,13 +1073,13 @@ const Classes = () => {
                     </div>
                   </form>
                 </div>
-                
+
                 <div className="modal-footer">
                   <button className="modal-btn modal-btn-cancel" onClick={handleCloseModal}>
                     Cancel
                   </button>
-                  <button 
-                    className="modal-btn modal-btn-confirm" 
+                  <button
+                    className="modal-btn modal-btn-confirm"
                     onClick={handleSave}
                     disabled={!isFormValid() || isLoading}
                   >
@@ -1716,9 +1095,9 @@ const Classes = () => {
       {/* Edit Class Modal */}
       {showEditModal && (
         <div className="modal-overlay" onClick={handleCloseEditModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '600px', minHeight: editModalLoading ? '400px' : 'auto' }}
           >
             {editModalLoading ? (
@@ -1749,14 +1128,14 @@ const Classes = () => {
                     </svg>
                   </button>
                 </div>
-                
+
                 <div className="modal-body">
                   {editFormError && (
                     <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
                       {editFormError}
                     </div>
                   )}
-                  
+
                   <form onSubmit={handleUpdateClass} className="modal-form">
                     <div className="form-group">
                       <label className="form-label">
@@ -1772,7 +1151,7 @@ const Classes = () => {
                         required
                       />
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">
                         Stream <span className="required">*</span>
@@ -1792,7 +1171,7 @@ const Classes = () => {
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">Capacity</label>
                       <input
@@ -1805,7 +1184,7 @@ const Classes = () => {
                         min="1"
                       />
                     </div>
-                    
+
                     <div className="form-group">
                       <label className="form-label">Homeroom Teacher</label>
                       <select
@@ -1824,13 +1203,13 @@ const Classes = () => {
                     </div>
                   </form>
                 </div>
-                
+
                 <div className="modal-footer">
                   <button className="modal-btn modal-btn-cancel" onClick={handleCloseEditModal}>
                     Cancel
                   </button>
-                  <button 
-                    className="modal-btn modal-btn-confirm" 
+                  <button
+                    className="modal-btn modal-btn-confirm"
                     onClick={handleUpdateClass}
                     disabled={!isEditFormValid() || isSaving}
                   >
@@ -1846,9 +1225,9 @@ const Classes = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && classToDelete && (
         <div className="modal-overlay" onClick={handleCloseDeleteModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '500px' }}
           >
             <div className="modal-header">
@@ -1860,16 +1239,16 @@ const Classes = () => {
                 </svg>
               </button>
             </div>
-            
+
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-                <div style={{ 
-                  width: '48px', 
-                  height: '48px', 
-                  borderRadius: '50%', 
-                  background: '#fee2e2', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0
                 }}>
@@ -1888,10 +1267,10 @@ const Classes = () => {
                   </p>
                 </div>
               </div>
-              
-              <div style={{ 
-                padding: '12px', 
-                background: '#f9fafb', 
+
+              <div style={{
+                padding: '12px',
+                background: '#f9fafb',
                 borderRadius: '4px',
                 border: '1px solid #e5e7eb'
               }}>
@@ -1906,17 +1285,17 @@ const Classes = () => {
                 </div>
               </div>
             </div>
-            
+
             <div className="modal-footer">
-              <button 
-                className="modal-btn modal-btn-cancel" 
+              <button
+                className="modal-btn modal-btn-cancel"
                 onClick={handleCloseDeleteModal}
                 disabled={isDeleting}
               >
                 Cancel
               </button>
-              <button 
-                className="modal-btn modal-btn-delete" 
+              <button
+                className="modal-btn modal-btn-delete"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
               >
@@ -2091,9 +1470,9 @@ const Classes = () => {
       {/* Bulk Term Year Modal */}
       {showBulkTermYearModal && (
         <div className="modal-overlay" onClick={() => setShowBulkTermYearModal(false)}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '500px' }}
           >
             <div className="modal-header">
@@ -2102,7 +1481,7 @@ const Classes = () => {
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
-            
+
             <div className="modal-body">
               <form onSubmit={handleBulkTermYearSubmit} className="modal-form">
                 <div className="form-group">
@@ -2120,7 +1499,7 @@ const Classes = () => {
                     <option value="3">Term 3</option>
                   </select>
                 </div>
-                
+
                 <div className="form-group">
                   <label className="form-label">Academic Year <span className="required">*</span></label>
                   <input
@@ -2133,7 +1512,7 @@ const Classes = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="form-label">Start Date <span className="required">*</span></label>
                   <input
@@ -2145,7 +1524,7 @@ const Classes = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="form-group">
                   <label className="form-label">End Date <span className="required">*</span></label>
                   <input
@@ -2159,7 +1538,7 @@ const Classes = () => {
                 </div>
               </form>
             </div>
-            
+
             <div className="modal-footer">
               <button className="modal-btn modal-btn-cancel" onClick={() => setShowBulkTermYearModal(false)}>
                 Cancel
@@ -2178,8 +1557,8 @@ const Classes = () => {
       {/* Add Gradelevel Class Modal */}
       {showAddGradelevelClassModal && (
         <div className="modal-overlay" onClick={() => setShowAddGradelevelClassModal(false)}>
-          <div 
-            className="modal-dialog" 
+          <div
+            className="modal-dialog"
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}
           >
@@ -2205,8 +1584,8 @@ const Classes = () => {
       {/* Success Toast */}
       {toast.visible && toast.message && (
         <div className="success-toast">
-          <div 
-            className="success-toast-content" 
+          <div
+            className="success-toast-content"
             style={{ background: getToastBackgroundColor(toast.type) }}
           >
             {getToastIcon(toast.type)}

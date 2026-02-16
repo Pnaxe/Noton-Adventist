@@ -160,16 +160,6 @@
   height: 100%;
 }
 
-.top-nav-bar--with-tabs {
-  height: auto;
-  padding: 0;
-}
-
-.top-nav-bar--with-tabs .top-nav-content {
-  height: 60px;
-  padding: 0 20px;
-}
-
 .top-nav-left {
   display: flex;
   align-items: center;
@@ -189,6 +179,32 @@
   gap: 0;
 }
 
+.top-nav-bar--compact .top-nav-center {
+  display: none;
+}
+
+.top-nav-center--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.top-nav-dropdown {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: #fff;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-width: 200px;
+}
+
+.top-nav-dropdown:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
 /* Billing top tabs: allow horizontal scroll when items overflow */
 .billing-tabs {
   max-width: 100%;
@@ -203,11 +219,6 @@
 
 .billing-tabs::-webkit-scrollbar {
   height: 0;
-}
-
-.billing-tabs-row {
-  border-top: 1px solid var(--border-color);
-  background: var(--card-bg);
 }
 
 .top-nav-menu-item {
@@ -239,29 +250,46 @@
   gap: 20px;
 }
 
+.top-nav-compact-menu {
+  display: flex;
+  align-items: center;
+}
+
 .top-nav-user-info {
   display: flex;
   align-items: center;
-  gap: 12px;
   position: relative;
 }
 
+.top-nav-user-info-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
 .top-nav-user-details {
-  text-align: right;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  line-height: 1.2;
 }
 
 .top-nav-username {
   font-weight: 600;
   color: var(--text-primary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   margin: 0;
+  white-space: nowrap;
 }
 
 .top-nav-user-role {
   color: var(--text-secondary);
-  font-size: 0.65rem;
+  font-size: 0.6875rem;
   margin: 0;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .top-nav-avatar {
@@ -363,11 +391,13 @@
 }
 
 .main-content-scrollable--billing {
-  padding-top: 130px;
+  padding-top: 80px;
 }
 
 .main-content-scrollable--billing .report-header {
   margin-top: 0;
+  padding-top: 8px;
+  padding-bottom: 6px;
 }
 
 .main-content-scrollable--accounting {
@@ -1290,6 +1320,10 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 @media (max-width: 768px) {
+  .top-nav-dropdown {
+    min-width: 160px;
+  }
+
   .page-footer {
     padding: 12px 16px;
   }

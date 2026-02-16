@@ -4,7 +4,7 @@ import BASE_URL from '../../contexts/Api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEye, faSearch } from '@fortawesome/free-solid-svg-icons';
+import { faEye, faSearch, faPlus } from '@fortawesome/free-solid-svg-icons';
 
 const AccountsPayable = () => {
   const { token } = useAuth();
@@ -16,7 +16,7 @@ const AccountsPayable = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPayable, setSelectedPayable] = useState(null);
@@ -29,12 +29,12 @@ const AccountsPayable = () => {
   });
   const [currencies, setCurrencies] = useState([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentModalError, setPaymentModalError] = useState('');
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedPayableForView, setSelectedPayableForView] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
-  
-  // Opening Balance states
+
   const [showOpeningBalanceModal, setShowOpeningBalanceModal] = useState(false);
   const [suppliers, setSuppliers] = useState([]);
   const [openingBalanceForm, setOpeningBalanceForm] = useState({
@@ -47,6 +47,26 @@ const AccountsPayable = () => {
     currency_id: 1
   });
   const [openingBalanceLoading, setOpeningBalanceLoading] = useState(false);
+
+  const [toast, setToast] = useState({ message: null, type: 'success', visible: false });
+
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast((prev) => ({ ...prev, visible: false }));
+        setTimeout(() => setToast({ message: null, type: 'success', visible: false }), 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = { width: '20', height: '20', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '2', strokeLinecap: 'round', strokeLinejoin: 'round' };
+    if (type === 'success') return <svg {...iconProps}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>;
+    if (type === 'error') return <svg {...iconProps}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>;
+    return null;
+  };
+  const getToastBg = (type) => (type === 'success' ? '#10b981' : '#ef4444');
 
   const fetchCurrencies = async () => {
     try {
@@ -65,16 +85,11 @@ const AccountsPayable = () => {
   const fetchPayables = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString()
-      });
+      setError('');
+      const params = new URLSearchParams({ page: page.toString(), pageSize: pageSize.toString() });
       if (search) params.append('search', search);
       if (statusFilter) params.append('status', statusFilter);
-
-      const res = await axios.get(`${BASE_URL}/expenses/accounts-payable?${params}`, { 
-        headers: { Authorization: `Bearer ${token}` } 
-      });
+      const res = await axios.get(`${BASE_URL}/expenses/accounts-payable?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       setPayables(res.data.data || []);
       setTotal(res.data.total || 0);
     } catch (err) {
@@ -86,9 +101,7 @@ const AccountsPayable = () => {
 
   const fetchSummary = async () => {
     try {
-      const res = await axios.get(`${BASE_URL}/expenses/accounts-payable/summary`, { 
-        headers: { Authorization: `Bearer ${token}` } 
-      });
+      const res = await axios.get(`${BASE_URL}/expenses/accounts-payable/summary`, { headers: { Authorization: `Bearer ${token}` } });
       setSummary(res.data.data || {});
     } catch {}
   };
@@ -96,9 +109,7 @@ const AccountsPayable = () => {
   const fetchTransactions = async (payableId) => {
     try {
       setTransactionsLoading(true);
-      const res = await axios.get(`${BASE_URL}/expenses/accounts-payable/${payableId}/payments`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${BASE_URL}/expenses/accounts-payable/${payableId}/payments`, { headers: { Authorization: `Bearer ${token}` } });
       setTransactions(res.data.data || []);
     } catch (err) {
       console.error('Error fetching transactions:', err);
@@ -115,7 +126,7 @@ const AccountsPayable = () => {
   }, [page, pageSize, search, statusFilter]);
 
   const handleSearch = (e) => {
-    setSearch(e.target.value);
+    e.preventDefault();
     setPage(1);
   };
 
@@ -133,7 +144,7 @@ const AccountsPayable = () => {
       payment_method: 'cash',
       description: `Payment for ${payable.expense_description}`
     });
-    setError(''); // Clear any previous errors
+    setPaymentModalError('');
     setShowPaymentModal(true);
   };
 
@@ -146,7 +157,7 @@ const AccountsPayable = () => {
   const handlePaymentSubmit = async (e) => {
     e.preventDefault();
     setPaymentLoading(true);
-    setError(''); // Clear previous errors
+    setPaymentModalError('');
     try {
       await axios.post(`${BASE_URL}/expenses/accounts-payable/${selectedPayable.id}/pay`, {
         amount: parseFloat(paymentForm.amount),
@@ -154,18 +165,14 @@ const AccountsPayable = () => {
         payment_date: paymentForm.payment_date,
         payment_method: paymentForm.payment_method,
         description: paymentForm.description
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      // Only close modal on success
+      }, { headers: { Authorization: `Bearer ${token}` } });
       setShowPaymentModal(false);
-      setError('');
       fetchPayables();
       fetchSummary();
+      showToast('Payment recorded successfully.', 'success');
     } catch (err) {
-      console.error('Payment error:', err);
-      // Keep modal open and show error
-      setError(err.response?.data?.message || err.message);
+      setPaymentModalError(err.response?.data?.message || err.message || 'Payment failed');
+      showToast(err.response?.data?.message || 'Payment failed', 'error');
     } finally {
       setPaymentLoading(false);
     }
@@ -183,9 +190,7 @@ const AccountsPayable = () => {
         due_date: openingBalanceForm.due_date || null,
         opening_balance_date: openingBalanceForm.opening_balance_date,
         currency_id: openingBalanceForm.currency_id
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      }, { headers: { Authorization: `Bearer ${token}` } });
       setShowOpeningBalanceModal(false);
       setOpeningBalanceForm({
         supplier_id: '',
@@ -198,10 +203,10 @@ const AccountsPayable = () => {
       });
       fetchPayables();
       fetchSummary();
-      alert('Opening balance created successfully!');
+      showToast('Opening balance created successfully.', 'success');
     } catch (err) {
       console.error('Opening balance error:', err);
-      setError('Failed to create opening balance: ' + (err.response?.data?.message || err.message));
+      showToast('Failed to create opening balance: ' + (err.response?.data?.message || err.message), 'error');
     } finally {
       setOpeningBalanceLoading(false);
     }
@@ -217,127 +222,88 @@ const AccountsPayable = () => {
     }
   };
 
-  const formatCurrency = (amount, currencyCode) => {
-    return `${currencyCode} ${parseFloat(amount).toFixed(2)}`;
-  };
+  const formatCurrency = (amount, currencyCode) => `${currencyCode} ${parseFloat(amount).toFixed(2)}`;
+
+  const displayStart = total > 0 ? (page - 1) * pageSize + 1 : 0;
+  const displayEnd = Math.min(page * pageSize, total);
 
   return (
-    <div className="reports-container" style={{
-      height: '100%',
-      maxHeight: '100%',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'relative'
-    }}>
+    <div className="reports-container" style={{ height: '100%', maxHeight: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* Report Header - like Students */}
       <div className="report-header" style={{ flexShrink: 0 }}>
         <div className="report-header-content">
-          <h2 className="report-title">Accounts Payable</h2>
-          <p className="report-subtitle">Manage outstanding payments and track transaction history.</p>
+          <h2 className="report-title">Liabilities</h2>
+          <p className="report-subtitle">Manage accounts payable and outstanding payments.</p>
         </div>
         <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button onClick={() => setShowOpeningBalanceModal(true)} className="btn-checklist">
-            + Add Opening Balance
+          <button type="button" onClick={() => setShowOpeningBalanceModal(true)} className="btn-checklist">
+            <FontAwesomeIcon icon={faPlus} />
+            Opening Balance
           </button>
         </div>
       </div>
-      
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 px-4 lg:px-8">
-        <div className="bg-white p-4 border border-gray-200">
-          <div className="text-xs text-gray-600">Total Payables</div>
-          <div className="text-lg font-semibold">{summary.total_payables || 0}</div>
-        </div>
-        <div className="bg-white p-4 border border-gray-200">
-          <div className="text-xs text-gray-600">Total Outstanding</div>
-          <div className="text-lg font-semibold text-red-600">
-            {summary.total_outstanding ? formatCurrency(summary.total_outstanding, 'USD') : 'USD 0.00'}
-          </div>
-        </div>
-        <div className="bg-white p-4 border border-gray-200">
-          <div className="text-xs text-gray-600">Outstanding</div>
-          <div className="text-lg font-semibold text-red-600">{summary.outstanding_count || 0}</div>
-        </div>
-        <div className="bg-white p-4 border border-gray-200">
-          <div className="text-xs text-gray-600">Overdue</div>
-          <div className="text-lg font-semibold text-red-800">{summary.overdue_count || 0}</div>
-        </div>
-      </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 border border-gray-200 mb-6 mx-4 lg:mx-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Search</label>
-            <input
-              type="text"
-              value={search}
-              onChange={handleSearch}
-              placeholder="Search by supplier, description..."
-              className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Status</label>
+      {/* Filters - like Students */}
+      <div className="report-filters" style={{ flexShrink: 0 }}>
+        <div className="report-filters-left" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <form onSubmit={handleSearch} className="filter-group">
+            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <FontAwesomeIcon icon={faSearch} className="search-icon" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                placeholder="Search by supplier, description..."
+                className="filter-input search-input"
+              />
+            </div>
+          </form>
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px' }}>Status:</label>
             <select
               value={statusFilter}
               onChange={handleStatusFilter}
-              className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="filter-input"
+              style={{ minWidth: '140px' }}
             >
-              <option value="">All Status</option>
+              <option value="">All</option>
               <option value="outstanding">Outstanding</option>
               <option value="partial">Partial</option>
               <option value="paid">Paid</option>
               <option value="overdue">Overdue</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs text-gray-600 mb-1">Page Size</label>
+          <div className="filter-group">
+            <label className="filter-label" style={{ marginRight: '8px' }}>Page size:</label>
             <select
               value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="filter-input"
+              style={{ minWidth: '80px' }}
             >
               <option value={10}>10</option>
-              <option value={20}>20</option>
+              <option value={25}>25</option>
               <option value={50}>50</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="report-content-container ecl-table-container" style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        overflow: 'auto',
-        minHeight: 0,
-        padding: 0,
-        height: '100%'
-      }}>
+      {/* Error */}
+      {error && (
+        <div style={{ padding: '10px 30px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', flexShrink: 0 }}>{error}</div>
+      )}
+
+      {/* Table Container - like Students */}
+      <div className="report-content-container ecl-table-container" style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: 0 }}>
         {loading ? (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: '200px',
-              gap: '16px'
-            }}
-          >
-            <div className="loading-spinner"></div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading accounts payable...</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', gap: '16px' }}>
+            <div className="loading-spinner" />
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading...</p>
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-            <thead style={{
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
-              background: 'var(--sidebar-bg)'
-            }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--sidebar-bg)' }}>
               <tr>
                 <th style={{ padding: '6px 10px' }}>PAYABLE TO</th>
                 <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
@@ -350,409 +316,231 @@ const AccountsPayable = () => {
               </tr>
             </thead>
             <tbody>
-              {payables.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ padding: '12px 10px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    No accounts payable found.
+              {payables.map((payable, index) => (
+                <tr key={payable.id} style={{ height: '32px', backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
+                  <td style={{ padding: '4px 10px' }}>{payable.payable_to || 'Non-Supplier'}</td>
+                  <td style={{ padding: '4px 10px' }}>{payable.expense_description}</td>
+                  <td style={{ padding: '4px 10px' }}>{formatCurrency(payable.original_amount, payable.currency_code)}</td>
+                  <td style={{ padding: '4px 10px' }}>{formatCurrency(payable.paid_amount, payable.currency_code)}</td>
+                  <td style={{ padding: '4px 10px', fontWeight: 600 }}>{formatCurrency(payable.outstanding_balance, payable.currency_code)}</td>
+                  <td style={{ padding: '4px 10px' }}>
+                    <span className={`px-2 py-1 text-xs rounded ${getStatusColor(payable.status)}`}>{payable.status}</span>
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>{payable.due_date || '—'}</td>
+                  <td style={{ padding: '4px 10px', whiteSpace: 'nowrap' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <button type="button" onClick={() => handleViewTransactions(payable)} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="View Transactions">
+                        <FontAwesomeIcon icon={faEye} className="h-3 w-3" />
+                      </button>
+                      {payable.status !== 'paid' && (
+                        <button type="button" onClick={() => handleMakePayment(payable)} style={{ color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Pay</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                payables.map((payable, index) => (
-                  <tr
-                    key={payable.id}
-                    style={{
-                      height: '32px',
-                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
-                    }}
-                  >
-                    <td style={{ padding: '4px 10px' }}>{payable.payable_to || 'Non-Supplier'}</td>
-                    <td style={{ padding: '4px 10px' }}>{payable.expense_description}</td>
-                    <td style={{ padding: '4px 10px' }}>{formatCurrency(payable.original_amount, payable.currency_code)}</td>
-                    <td style={{ padding: '4px 10px' }}>{formatCurrency(payable.paid_amount, payable.currency_code)}</td>
-                    <td style={{ padding: '4px 10px', fontWeight: 600 }}>{formatCurrency(payable.outstanding_balance, payable.currency_code)}</td>
-                    <td style={{ padding: '4px 10px' }}>
-                      <span className={`px-2 py-1 text-xs rounded ${getStatusColor(payable.status)}`}>
-                        {payable.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '4px 10px' }}>{payable.due_date || 'Not set'}</td>
-                    <td style={{ padding: '4px 10px', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <button
-                          onClick={() => handleViewTransactions(payable)}
-                          style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                          title="View Transactions"
-                        >
-                          <FontAwesomeIcon icon={faEye} className="h-3 w-3" />
-                        </button>
-                        {payable.status !== 'paid' && (
-                          <button
-                            onClick={() => handleMakePayment(payable)}
-                            style={{ color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                            title="Make Payment"
-                          >
-                            Pay
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
+              {Array.from({ length: Math.max(0, pageSize - payables.length) }).map((_, i) => (
+                <tr key={`empty-${i}`} style={{ height: '32px', backgroundColor: (payables.length + i) % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         )}
       </div>
 
-      {/* Pagination */}
-      {total > pageSize && (
-        <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
-          <div className="table-footer-left">
-            Showing {((page - 1) * pageSize) + 1} to {Math.min(page * pageSize, total)} of {total} results
-          </div>
-          <div className="table-footer-right">
-            <button
-              onClick={() => setPage(page - 1)}
-              disabled={page === 1}
-              className="pagination-btn"
-            >
-              Previous
-            </button>
-            <button
-              onClick={() => setPage(page + 1)}
-              disabled={page * pageSize >= total}
-              className="pagination-btn"
-            >
-              Next
-            </button>
-          </div>
+      {/* Footer - like Students */}
+      <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+        <div className="table-footer-left">
+          Showing {displayStart} to {displayEnd} of {total} results.
         </div>
-      )}
+        <div className="table-footer-right">
+          {total > pageSize ? (
+            <div className="pagination-controls">
+              <button type="button" className="pagination-btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Previous</button>
+              <span className="pagination-info" style={{ fontSize: '0.7rem' }}>Page {page} of {Math.ceil(total / pageSize) || 1}</span>
+              <button type="button" className="pagination-btn" onClick={() => setPage(p => Math.min(Math.ceil(total / pageSize), p + 1))} disabled={page * pageSize >= total}>Next</button>
+            </div>
+          ) : (
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>All data displayed</div>
+          )}
+        </div>
+      </div>
 
-      {/* Payment Modal */}
+      {/* Payment Modal - modal-overlay/dialog like Students */}
       {showPaymentModal && selectedPayable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 w-full max-w-md">
-            {/* Error Message Above Modal */}
-            {error && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 text-xs rounded">
-                <strong>Error:</strong> {error}
-              </div>
-            )}
-            
-            <h2 className="text-base font-semibold mb-4">Make Payment</h2>
-            <form onSubmit={handlePaymentSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Amount</label>
-                <input
-                  type="number"
-                  value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  required
-                  step="0.01"
-                  max={selectedPayable.outstanding_balance}
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Payment Date</label>
-                <input
-                  type="date"
-                  value={paymentForm.payment_date}
-                  onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Payment Method</label>
-                <select
-                  value={paymentForm.payment_method}
-                  onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  required
-                >
-                  <option value="cash">Cash</option>
-                  <option value="bank">Bank</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Description</label>
-                <input
-                  type="text"
-                  value={paymentForm.description}
-                  onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPaymentModal(false);
-                    setError(''); // Clear error when closing
-                  }}
-                  className="px-4 py-1 text-xs text-gray-700 bg-gray-200 hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={paymentLoading}
-                  className="px-4 py-1 text-xs text-white bg-gray-900 hover:bg-gray-800"
-                >
-                  {paymentLoading ? 'Processing...' : 'Make Payment'}
-                </button>
-              </div>
-            </form>
+        <div className="modal-overlay" onClick={() => { setShowPaymentModal(false); setPaymentModalError(''); }}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Make Payment</h3>
+              <button type="button" className="modal-close-btn" onClick={() => { setShowPaymentModal(false); setPaymentModalError(''); }} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              {paymentModalError && (
+                <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>{paymentModalError}</div>
+              )}
+              <form onSubmit={handlePaymentSubmit} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">Amount <span className="required">*</span></label>
+                  <input type="number" value={paymentForm.amount} onChange={(e) => setPaymentForm(prev => ({ ...prev, amount: e.target.value }))} className="form-control" required step="0.01" max={selectedPayable.outstanding_balance} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Payment Date <span className="required">*</span></label>
+                  <input type="date" value={paymentForm.payment_date} onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_date: e.target.value }))} className="form-control" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Payment Method</label>
+                  <select value={paymentForm.payment_method} onChange={(e) => setPaymentForm(prev => ({ ...prev, payment_method: e.target.value }))} className="form-control">
+                    <option value="cash">Cash</option>
+                    <option value="bank">Bank</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <input type="text" value={paymentForm.description} onChange={(e) => setPaymentForm(prev => ({ ...prev, description: e.target.value }))} className="form-control" />
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                  <button type="button" className="modal-btn modal-btn-cancel" onClick={() => { setShowPaymentModal(false); setPaymentModalError(''); }}>Cancel</button>
+                  <button type="submit" className="modal-btn modal-btn-confirm" disabled={paymentLoading}>{paymentLoading ? 'Processing...' : 'Make Payment'}</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* View Transactions Modal */}
       {showViewModal && selectedPayableForView && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-base font-semibold">Transaction History</h2>
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                ×
+        <div className="modal-overlay" onClick={() => setShowViewModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Transaction History</h3>
+              <button type="button" className="modal-close-btn" onClick={() => setShowViewModal(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
-            
-            <div className="mb-4 p-4 bg-gray-50">
-              <h3 className="text-sm font-medium mb-2">Payable Details</h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div>
-                  <span className="text-gray-600">Payable To:</span>
-                  <div className="font-medium">{selectedPayableForView.payable_to || 'Non-Supplier'}</div>
-                </div>
-                <div>
-                  <span className="text-gray-600">Description:</span>
-                  <div className="font-medium">{selectedPayableForView.expense_description}</div>
-                </div>
-                <div>
-                  <span className="text-gray-600">Outstanding:</span>
-                  <div className="font-medium text-red-600">
-                    {formatCurrency(selectedPayableForView.outstanding_balance, selectedPayableForView.currency_code)}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-600">Status:</span>
-                  <div className="font-medium">
-                    <span className={`px-2 py-1 text-xs rounded ${getStatusColor(selectedPayableForView.status)}`}>
-                      {selectedPayableForView.status}
-                    </span>
-                  </div>
+            <div className="modal-body" style={{ overflow: 'auto' }}>
+              <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--sidebar-bg)', color: '#fff', borderRadius: '8px', fontSize: '0.8125rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+                  <div><span style={{ opacity: 0.9 }}>Payable To</span><div style={{ fontWeight: 600 }}>{selectedPayableForView.payable_to || 'Non-Supplier'}</div></div>
+                  <div><span style={{ opacity: 0.9 }}>Outstanding</span><div style={{ fontWeight: 600 }}>{formatCurrency(selectedPayableForView.outstanding_balance, selectedPayableForView.currency_code)}</div></div>
+                  <div><span style={{ opacity: 0.9 }}>Status</span><div><span className={`px-2 py-1 text-xs rounded ${getStatusColor(selectedPayableForView.status)}`}>{selectedPayableForView.status}</span></div></div>
                 </div>
               </div>
-            </div>
-
-            {transactionsLoading ? (
-              <div className="text-center py-4">
-                <div className="text-xs text-gray-500">Loading transactions...</div>
-              </div>
-            ) : transactions.length === 0 ? (
-              <div className="text-center py-4">
-                <div className="text-xs text-gray-500">No transactions found</div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Payment Date</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Amount Paid</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Payment Method</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Description</th>
-                      <th className="px-3 py-2 text-left text-xs font-medium tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {transactions.map((transaction) => (
-                      <tr key={transaction.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {new Date(transaction.payment_date).toLocaleDateString()}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900 font-medium">
-                            {formatCurrency(transaction.amount_paid, selectedPayableForView.currency_code)}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900 capitalize">
-                            {transaction.payment_method}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-xs text-gray-900">
-                            {transaction.description || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap">
-                          <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">
-                            {transaction.status}
-                          </span>
-                        </td>
+              {transactionsLoading ? (
+                <div className="loading-spinner" style={{ margin: '24px auto' }} />
+              ) : transactions.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No transactions found.</p>
+              ) : (
+                <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+                  <thead><tr><th style={{ padding: '6px 10px' }}>DATE</th><th style={{ padding: '6px 10px' }}>AMOUNT</th><th style={{ padding: '6px 10px' }}>METHOD</th><th style={{ padding: '6px 10px' }}>DESCRIPTION</th></tr></thead>
+                  <tbody>
+                    {transactions.map((t) => (
+                      <tr key={t.id} style={{ backgroundColor: '#fafafa' }}>
+                        <td style={{ padding: '6px 10px' }}>{new Date(t.payment_date).toLocaleDateString()}</td>
+                        <td style={{ padding: '6px 10px' }}>{formatCurrency(t.amount_paid, selectedPayableForView.currency_code)}</td>
+                        <td style={{ padding: '6px 10px' }}>{t.payment_method}</td>
+                        <td style={{ padding: '6px 10px' }}>{t.description || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Opening Balance Modal */}
+      {/* Opening Balance Modal - like Students add modal */}
       {showOpeningBalanceModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-base font-semibold">Add Opening Balance</h2>
-                <p className="text-xs text-gray-600 mt-1">Record historical debt or payable</p>
-              </div>
-              <button
-                onClick={() => setShowOpeningBalanceModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ×
+        <div className="modal-overlay" onClick={() => setShowOpeningBalanceModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Opening Balance</h3>
+              <button type="button" className="modal-close-btn" onClick={() => setShowOpeningBalanceModal(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
-            
-            <form onSubmit={handleOpeningBalanceSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Supplier <span className="text-gray-400">(Optional)</span>
-                  </label>
+            <div className="modal-body" style={{ overflow: 'auto' }}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>Record a historical liability or payable. This will create a journal entry and add the payable to the list.</p>
+              <form onSubmit={handleOpeningBalanceSubmit} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">Supplier <span style={{ color: 'var(--text-secondary)', fontWeight: 'normal' }}>(optional)</span></label>
                   <select
                     value={openingBalanceForm.supplier_id}
                     onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, supplier_id: e.target.value }))}
-                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="form-control"
                   >
-                    <option value="">Select Supplier (Optional)</option>
-                    {suppliers.map(supplier => (
-                      <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
-                    ))}
+                    <option value="">Select supplier (optional)</option>
+                    {suppliers.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Amount <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={openingBalanceForm.amount}
-                    onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, amount: e.target.value }))}
-                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                    placeholder="e.g., 50000.00"
-                  />
+                <div className="form-group">
+                  <label className="form-label">Amount <span className="required">*</span></label>
+                  <input type="number" step="0.01" value={openingBalanceForm.amount} onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, amount: e.target.value }))} className="form-control" required placeholder="e.g. 50000.00" />
                 </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={openingBalanceForm.description}
-                    onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    rows="3"
-                    required
-                    placeholder="e.g., City Council - Historical Debt from 2020"
-                  />
+                <div className="form-group">
+                  <label className="form-label">Description <span className="required">*</span></label>
+                  <textarea value={openingBalanceForm.description} onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, description: e.target.value }))} className="form-control" rows={3} required placeholder="e.g. City Council – historical debt" />
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Reference Number
-                  </label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={openingBalanceForm.reference_number}
-                      onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, reference_number: e.target.value }))}
-                      className="flex-1 border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="e.g., CC-2020-DEBT"
-                    />
+                <div className="form-group">
+                  <label className="form-label">Reference number</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input type="text" value={openingBalanceForm.reference_number} onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, reference_number: e.target.value }))} className="form-control" placeholder="e.g. OB-2024-001" />
                     <button
                       type="button"
-                      onClick={() => {
-                        const timestamp = Date.now();
-                        const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-                        const refNumber = `OB-${new Date().getFullYear()}-${randomNum}-${timestamp.toString().slice(-4)}`;
-                        setOpeningBalanceForm(prev => ({ ...prev, reference_number: refNumber }));
-                      }}
-                      className="px-3 py-1 text-xs bg-gray-600 text-white hover:bg-gray-700 whitespace-nowrap"
+                      className="modal-btn"
+                      style={{ background: '#6b7280', color: 'white', whiteSpace: 'nowrap', padding: '8px 12px' }}
+                      onClick={() => setOpeningBalanceForm(prev => ({ ...prev, reference_number: `OB-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}-${Date.now().toString().slice(-4)}` }))}
                     >
-                      Auto Generate
+                      Generate
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Leave blank or click Auto Generate</p>
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Opening Balance Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={openingBalanceForm.opening_balance_date}
-                    onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, opening_balance_date: e.target.value }))}
-                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    required
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Opening balance date <span className="required">*</span></label>
+                    <input type="date" value={openingBalanceForm.opening_balance_date} onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, opening_balance_date: e.target.value }))} className="form-control" required />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Due date</label>
+                    <input type="date" value={openingBalanceForm.due_date} onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, due_date: e.target.value }))} className="form-control" />
+                  </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs text-gray-600 mb-1">
-                    Due Date
-                  </label>
-                  <input
-                    type="date"
-                    value={openingBalanceForm.due_date}
-                    onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, due_date: e.target.value }))}
-                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  />
+                <div className="form-group">
+                  <label className="form-label">Currency</label>
+                  <select value={openingBalanceForm.currency_id} onChange={(e) => setOpeningBalanceForm(prev => ({ ...prev, currency_id: Number(e.target.value) }))} className="form-control">
+                    {currencies.map((c) => (<option key={c.id} value={c.id}>{c.code || c.name}</option>))}
+                  </select>
                 </div>
+                <div style={{ marginTop: '16px', padding: '12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '0.75rem', color: '#1e40af' }}>
+                  This creates a journal entry (e.g. Retained Earnings / Accounts Payable). The payable will appear in the list and can be paid like any other.
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '20px' }}>
+                  <button type="button" className="modal-btn modal-btn-cancel" onClick={() => setShowOpeningBalanceModal(false)}>Cancel</button>
+                  <button type="submit" className="modal-btn modal-btn-confirm" disabled={openingBalanceLoading}>{openingBalanceLoading ? 'Creating...' : 'Create Opening Balance'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 p-3 mt-4">
-                <p className="text-xs text-blue-800">
-                  <strong>Note:</strong> This will create a journal entry debiting Retained Earnings (3998) 
-                  and crediting Accounts Payable (2000). This ensures historical debts don't inflate current 
-                  period expenses. The payable will appear in the list above and can be paid off like any other payable.
-                </p>
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowOpeningBalanceModal(false)}
-                  className="px-4 py-2 text-xs text-gray-700 bg-gray-200 hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={openingBalanceLoading}
-                  className="px-4 py-2 text-xs text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {openingBalanceLoading ? 'Creating...' : 'Create Opening Balance'}
-                </button>
-              </div>
-            </form>
+      {/* Toast */}
+      {toast.visible && toast.message && (
+        <div className="success-toast">
+          <div className="success-toast-content" style={{ background: getToastBg(toast.type) }}>
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
           </div>
         </div>
       )}

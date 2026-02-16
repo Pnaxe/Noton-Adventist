@@ -25,16 +25,16 @@ const Expenses = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const navigate = useNavigate();
-  
+
   // Add Expense Form State
-  const [addForm, setAddForm] = useState({ 
-    supplier_id: '', 
-    amount: '', 
-    currency_id: '', 
-    expense_date: new Date().toISOString().split('T')[0], 
-    description: '', 
-    payment_method: 'cash', 
-    payment_status: 'full', 
+  const [addForm, setAddForm] = useState({
+    supplier_id: '',
+    amount: '',
+    currency_id: '',
+    expense_date: new Date().toISOString().split('T')[0],
+    description: '',
+    payment_method: 'cash',
+    payment_status: 'full',
     expense_account_id: '',
     payment_account_id: '',
     amount_paid: '',
@@ -112,7 +112,7 @@ const Expenses = () => {
   const handleAddFormChange = (e) => {
     const { name, value } = e.target;
     setAddForm((prev) => ({ ...prev, [name]: value }));
-    
+
     // Auto-calculate amount paid for partial payments
     if (name === 'amount' && addForm.payment_status === 'partial') {
       const totalAmount = parseFloat(value) || 0;
@@ -125,13 +125,13 @@ const Expenses = () => {
 
   const handleOpenAddModal = () => {
     setAddForm({
-      supplier_id: '', 
-      amount: '', 
-      currency_id: '', 
-      expense_date: new Date().toISOString().split('T')[0], 
-      description: '', 
-      payment_method: 'cash', 
-      payment_status: 'full', 
+      supplier_id: '',
+      amount: '',
+      currency_id: '',
+      expense_date: new Date().toISOString().split('T')[0],
+      description: '',
+      payment_method: 'cash',
+      payment_status: 'full',
       expense_account_id: '',
       payment_account_id: '',
       amount_paid: '',
@@ -145,13 +145,13 @@ const Expenses = () => {
     setShowAddModal(false);
     setAddFormError('');
     setAddForm({
-      supplier_id: '', 
-      amount: '', 
-      currency_id: '', 
-      expense_date: new Date().toISOString().split('T')[0], 
-      description: '', 
-      payment_method: 'cash', 
-      payment_status: 'full', 
+      supplier_id: '',
+      amount: '',
+      currency_id: '',
+      expense_date: new Date().toISOString().split('T')[0],
+      description: '',
+      payment_method: 'cash',
+      payment_status: 'full',
       expense_account_id: '',
       payment_account_id: '',
       amount_paid: '',
@@ -178,7 +178,7 @@ const Expenses = () => {
     e.preventDefault();
     setAddFormLoading(true);
     setAddFormError('');
-    
+
     try {
       if (!addForm.amount || !addForm.currency_id || !addForm.expense_date || !addForm.payment_method || !addForm.payment_status || !addForm.expense_account_id) {
         setAddFormError('Please fill all required fields.');
@@ -220,7 +220,7 @@ const Expenses = () => {
         payment_account_id: addForm.payment_account_id || null,
         reference_number: addForm.reference_number
       }, { headers: { Authorization: `Bearer ${token}` } });
-      
+
       handleCloseAddModal();
       fetchExpenses();
     } catch (err) {
@@ -230,7 +230,7 @@ const Expenses = () => {
     }
   };
 
-  const remainingAmount = addForm.amount && addForm.amount_paid ? 
+  const remainingAmount = addForm.amount && addForm.amount_paid ?
     (parseFloat(addForm.amount) - parseFloat(addForm.amount_paid)).toFixed(2) : '';
 
   const handleDelete = async (id) => {
@@ -294,7 +294,7 @@ const Expenses = () => {
       {error && (
         <div style={{ padding: '10px 30px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', flexShrink: 0 }}>
           {error}
-      </div>
+        </div>
       )}
 
       {/* Filters Section */}
@@ -304,9 +304,9 @@ const Expenses = () => {
           <form onSubmit={handleSearch} className="filter-group">
             <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <FontAwesomeIcon icon={faSearch} className="search-icon" />
-        <input
-          type="text"
-          value={search}
+              <input
+                type="text"
+                value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by description, supplier..."
                 className="filter-input search-input"
@@ -344,9 +344,9 @@ const Expenses = () => {
           {/* Start Date Filter */}
           <div className="filter-group">
             <label className="filter-label" style={{ marginRight: '8px' }}>Start Date:</label>
-        <input
-          type="date"
-          value={startDate}
+            <input
+              type="date"
+              value={startDate}
               onChange={(e) => { setPage(1); setStartDate(e.target.value); }}
               className="filter-input"
               style={{ minWidth: '150px', width: '150px' }}
@@ -373,9 +373,9 @@ const Expenses = () => {
           {/* End Date Filter */}
           <div className="filter-group">
             <label className="filter-label" style={{ marginRight: '8px' }}>End Date:</label>
-        <input
-          type="date"
-          value={endDate}
+            <input
+              type="date"
+              value={endDate}
               onChange={(e) => { setPage(1); setEndDate(e.target.value); }}
               className="filter-input"
               style={{ minWidth: '150px', width: '150px' }}
@@ -445,8 +445,8 @@ const Expenses = () => {
                 <th style={{ padding: '6px 10px', textAlign: 'right', width: '120px' }}>CREDIT</th>
                 <th style={{ padding: '6px 10px', width: '100px' }}>REFERENCE</th>
                 <th style={{ padding: '6px 10px', width: '100px' }}>ACTIONS</th>
-                </tr>
-              </thead>
+              </tr>
+            </thead>
             <tbody>
               {expenses.map((e, index) => (
                 <tr
@@ -502,9 +502,9 @@ const Expenses = () => {
                         {deleteLoadingId === e.id ? '...' : <FontAwesomeIcon icon={faTrash} />}
                       </button>
                     </div>
-                    </td>
-                  </tr>
-                ))}
+                  </td>
+                </tr>
+              ))}
               {/* Empty placeholder rows to always show 25 rows */}
               {Array.from({ length: Math.max(0, 25 - expenses.length) }).map((_, index) => (
                 <tr
@@ -520,10 +520,10 @@ const Expenses = () => {
                   <td style={{ padding: '4px 10px' }}>&nbsp;</td>
                   <td style={{ padding: '4px 10px' }}>&nbsp;</td>
                   <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 
@@ -535,17 +535,17 @@ const Expenses = () => {
         <div className="table-footer-right">
           {totalPages > 1 && (
             <div className="pagination-controls">
-        <button
+              <button
                 className="pagination-btn"
                 onClick={() => setPage(Math.max(1, page - 1))}
-          disabled={page === 1}
+                disabled={page === 1}
               >
                 Previous
               </button>
               <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
                 Page {page} of {totalPages}
               </span>
-        <button
+              <button
                 className="pagination-btn"
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages}
@@ -557,9 +557,9 @@ const Expenses = () => {
           {totalPages <= 1 && (
             <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
               All data displayed
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>
       </div>
       {/* View Modal */}
       {showViewModal && (
@@ -582,7 +582,7 @@ const Expenses = () => {
                 </div>
                 <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                   <div style={{ height: '32px', width: '80px', background: '#e5e7eb', borderRadius: '4px' }}></div>
-            </div>
+                </div>
               </>
             ) : viewExpense ? (
               // Content State
@@ -668,9 +668,9 @@ const Expenses = () => {
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
                         {viewExpense.created_at || 'N/A'}
-                </div>
-                </div>
-                </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
                 <div className="modal-footer">
                   <button className="modal-btn modal-btn-cancel" onClick={() => setShowViewModal(false)}>
@@ -688,10 +688,10 @@ const Expenses = () => {
                     Close
                   </button>
                 </div>
-                </div>
-            )}
-                </div>
               </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Add Expense Modal */}
@@ -837,7 +837,7 @@ const Expenses = () => {
                             />
                             <button
                               type="button"
-                              onClick={() => setAddForm(prev => ({...prev, reference_number: generateReferenceNumber()}))}
+                              onClick={() => setAddForm(prev => ({ ...prev, reference_number: generateReferenceNumber() }))}
                               className="modal-btn"
                               style={{
                                 background: '#6b7280',

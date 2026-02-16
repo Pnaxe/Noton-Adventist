@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faEye,
-  faPlay
-} from '@fortawesome/free-solid-svg-icons';
+import { faEye, faPlay, faSearch } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import BASE_URL from '../../contexts/Api';
 import axios from 'axios';
@@ -17,12 +14,10 @@ const ClassTermYear = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Modal states
   const [showViewModal, setShowViewModal] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
 
-  // Bulk form states
   const [bulkFormData, setBulkFormData] = useState({
     term: '',
     academic_year: '',
@@ -30,34 +25,34 @@ const ClassTermYear = () => {
     end_date: ''
   });
 
-  // Success/Error modal states
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeSearchTerm, setActiveSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit] = useState(25);
 
   useEffect(() => {
     fetchClasses();
     fetchClassTermYears();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeSearchTerm]);
+
   const fetchClassTermYears = async () => {
     setLoading(true);
+    setError(null);
     try {
-      console.log('Fetching all class term years...');
-      console.log('URL:', `${BASE_URL}/classes/class-term-years`);
-
       const response = await axios.get(`${BASE_URL}/classes/class-term-years`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Response:', response.data);
       setClassTermYears(response.data.data || []);
-    } catch (error) {
-      console.error('Error fetching class term years:', error);
-      console.error('Error response:', error.response);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      console.error('Error message:', error.message);
+    } catch (err) {
       setError('Failed to fetch class term years');
     } finally {
       setLoading(false);
@@ -66,49 +61,28 @@ const ClassTermYear = () => {
 
   const fetchClasses = async () => {
     try {
-      console.log('Fetching classes...');
-      console.log('URL:', `${BASE_URL}/classes/gradelevel-classes`);
-      
       const response = await axios.get(`${BASE_URL}/classes/gradelevel-classes`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Classes response:', response.data);
       setClasses(response.data.data || []);
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-      console.error('Error response:', error.response);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      console.error('Error message:', error.message);
+    } catch (err) {
+      // non-blocking
     }
   };
 
-
-
   const handleBulkSubmit = async (e) => {
     e.preventDefault();
-
     try {
-      console.log('Bulk populate data:', bulkFormData);
-      console.log('URL:', `${BASE_URL}/classes/class-term-years/bulk-populate`);
-
       const response = await axios.post(`${BASE_URL}/classes/class-term-years/bulk-populate`, bulkFormData, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      console.log('Bulk populate response:', response.data);
       setSuccessMessage(response.data.message);
       setShowSuccessModal(true);
       setShowBulkModal(false);
       resetBulkForm();
       fetchClassTermYears();
-    } catch (error) {
-      console.error('Error bulk populating class term years:', error);
-      console.error('Error response:', error.response);
-      console.error('Error status:', error.response?.status);
-      console.error('Error data:', error.response?.data);
-      console.error('Error message:', error.message);
-      setErrorMessage(error.response?.data?.message || 'Failed to bulk populate class term years');
+    } catch (err) {
+      setErrorMessage(err.response?.data?.message || 'Failed to bulk populate class term years');
       setShowErrorModal(true);
     }
   };
@@ -117,7 +91,6 @@ const ClassTermYear = () => {
     setSelectedRecord(record);
     setShowViewModal(true);
   };
-
 
   const resetBulkForm = () => {
     setBulkFormData({
@@ -128,268 +101,390 @@ const ClassTermYear = () => {
     });
   };
 
+  const handleSearch = (e) => {
+    e.preventDefault();
+    setActiveSearchTerm(searchTerm);
+    setCurrentPage(1);
+  };
+
+  // Filter by search (class name, stream, term, academic year)
+  const filteredRecords = activeSearchTerm.trim()
+    ? classTermYears.filter((r) => {
+        const q = activeSearchTerm.trim().toLowerCase();
+        const className = (r.class_name || '').toLowerCase();
+        const streamName = (r.stream_name || '').toLowerCase();
+        const term = (r.term || '').toLowerCase();
+        const year = String(r.academic_year || '').toLowerCase();
+        return className.includes(q) || streamName.includes(q) || term.includes(q) || year.includes(q);
+      })
+    : classTermYears;
+
+  const totalFiltered = filteredRecords.length;
+  const usePagination = !activeSearchTerm.trim();
+  const totalPages = usePagination ? Math.max(1, Math.ceil(totalFiltered / limit)) : 1;
+  const startIndex = usePagination ? (currentPage - 1) * limit : 0;
+  const endIndex = usePagination ? startIndex + limit : totalFiltered;
+  const paginatedRecords = filteredRecords.slice(startIndex, endIndex);
+
+  const displayStart = totalFiltered > 0 ? startIndex + 1 : 0;
+  const displayEnd = Math.min(endIndex, totalFiltered);
+  const hasData = paginatedRecords.length > 0;
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-sm font-bold text-gray-900">Class Term Year Management</h1>
-            <p className="text-xs text-gray-500">Manage class assignments for terms and academic years</p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowBulkModal(true)}
-              className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-            >
-              <FontAwesomeIcon icon={faPlay} className="mr-1" />
-              Bulk Populate
-            </button>
-          </div>
+    <div
+      className="reports-container"
+      style={{
+        height: '100%',
+        maxHeight: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}
+    >
+      {/* Report Header - same as Classes */}
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Class Term Year</h2>
+          <p className="report-subtitle">Manage class assignments for terms and academic years.</p>
+        </div>
+        <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button onClick={() => setShowBulkModal(true)} className="btn-checklist">
+            <FontAwesomeIcon icon={faPlay} />
+            Bulk Populate
+          </button>
         </div>
       </div>
 
+      {/* Filters Section - match Classes page */}
+      <div className="report-filters" style={{ flexShrink: 0 }}>
+        <div className="report-filters-left">
+          <form onSubmit={handleSearch} className="filter-group">
+            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <FontAwesomeIcon icon={faSearch} className="search-icon" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by class name, stream, term or year..."
+                className="filter-input search-input"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setActiveSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    padding: '4px 6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '20px',
+                    height: '20px'
+                  }}
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
 
-      {/* Class Term Year Table */}
-      <div className="bg-white border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+      {/* Error Display */}
+      {error && (
+        <div style={{ padding: '10px 30px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', flexShrink: 0 }}>
+          {error}
+        </div>
+      )}
+
+      {/* Table Container - same as Classes */}
+      <div
+        className="report-content-container ecl-table-container"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          overflow: 'auto',
+          minHeight: 0,
+          padding: 0,
+          height: '100%'
+        }}
+      >
+        {loading && classTermYears.length === 0 ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner" />
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading class term years...</p>
+          </div>
+        ) : (
+          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+            <thead
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 10,
+                background: 'var(--sidebar-bg)'
+              }}
+            >
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Class
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Term
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Year
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Start Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  End Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th style={{ padding: '6px 10px' }}>CLASS NAME</th>
+                <th style={{ padding: '6px 10px' }}>STREAM</th>
+                <th style={{ padding: '6px 10px' }}>TERM</th>
+                <th style={{ padding: '6px 10px' }}>ACADEMIC YEAR</th>
+                <th style={{ padding: '6px 10px' }}>START DATE</th>
+                <th style={{ padding: '6px 10px' }}>END DATE</th>
+                <th style={{ padding: '6px 10px' }}>STATUS</th>
+                <th style={{ padding: '6px 10px' }}>ACTIONS</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
-                    Loading...
+            <tbody>
+              {paginatedRecords.map((record, index) => (
+                <tr
+                  key={record.id}
+                  style={{
+                    height: '32px',
+                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                  }}
+                >
+                  <td style={{ padding: '4px 10px' }}>{record.class_name || 'N/A'}</td>
+                  <td style={{ padding: '4px 10px' }}>{record.stream_name || 'N/A'}</td>
+                  <td style={{ padding: '4px 10px' }}>{record.term || 'N/A'}</td>
+                  <td style={{ padding: '4px 10px' }}>{record.academic_year || 'N/A'}</td>
+                  <td style={{ padding: '4px 10px' }}>
+                    {record.start_date ? new Date(record.start_date).toLocaleDateString() : '-'}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>
+                    {record.end_date ? new Date(record.end_date).toLocaleDateString() : '-'}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>{record.is_active ? 'Active' : 'Inactive'}</td>
+                  <td style={{ padding: '4px 10px' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <button
+                        onClick={() => handleView(record)}
+                        style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title="View"
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : classTermYears.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
-                    No class term year records found
-                  </td>
+              ))}
+              {Array.from({ length: Math.max(0, 25 - paginatedRecords.length) }).map((_, index) => (
+                <tr
+                  key={`empty-${index}`}
+                  style={{
+                    height: '32px',
+                    backgroundColor: (paginatedRecords.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                  }}
+                >
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
                 </tr>
-              ) : (
-                classTermYears.map((record) => (
-                  <tr key={record.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-medium text-gray-900">
-                        {record.class_name}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {record.stream_name}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-medium text-gray-900">
-                        {record.term}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-medium text-gray-900">
-                        {record.academic_year}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-medium text-gray-900">
-                        {record.start_date || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-xs font-medium text-gray-900">
-                        {record.end_date || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        record.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {record.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-xs font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleView(record)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <FontAwesomeIcon icon={faEye} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Pagination Footer - same as Classes */}
+      <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+        <div className="table-footer-left">
+          Showing {displayStart} to {displayEnd} of {totalFiltered || 0} results.
+        </div>
+        <div className="table-footer-right">
+          {!activeSearchTerm && totalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                className="pagination-btn"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
+          {!activeSearchTerm && totalPages <= 1 && (
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+              All data displayed
+            </div>
+          )}
         </div>
       </div>
 
-
-      {/* Bulk Populate Modal */}
+      {/* Bulk Populate Modal - same modal classes as Classes page */}
       {showBulkModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-200 p-6 w-full max-w-md">
-            <h2 className="text-sm font-bold mb-4">Bulk Populate Class Term Years</h2>
-            <p className="text-xs text-gray-600 mb-4">
-              This will create class term year records for all active classes for the specified term and academic year.
-            </p>
-            
-            <form onSubmit={handleBulkSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Term *
-                </label>
-                <select
-                  value={bulkFormData.term}
-                  onChange={(e) => setBulkFormData(prev => ({ ...prev, term: e.target.value }))}
-                  className="w-full border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  required
-                >
-                  <option value="">Select Term</option>
-                  <option value="Term 1">Term 1</option>
-                  <option value="Term 2">Term 2</option>
-                  <option value="Term 3">Term 3</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Academic Year *
-                </label>
-                <input
-                  type="text"
-                  value={bulkFormData.academic_year}
-                  onChange={(e) => setBulkFormData(prev => ({ ...prev, academic_year: e.target.value }))}
-                  placeholder="e.g., 2025"
-                  className="w-full border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={bulkFormData.start_date}
-                  onChange={(e) => setBulkFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                  className="w-full border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={bulkFormData.end_date}
-                  onChange={(e) => setBulkFormData(prev => ({ ...prev, end_date: e.target.value }))}
-                  className="w-full border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowBulkModal(false);
-                    resetBulkForm();
-                  }}
-                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                >
-                  Populate All Classes
-                </button>
-              </div>
-            </form>
+        <div className="modal-overlay" onClick={() => setShowBulkModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Bulk Populate Class Term Years</h3>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => {
+                  setShowBulkModal(false);
+                  resetBulkForm();
+                }}
+                aria-label="Close"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                This will create class term year records for all active classes for the specified term and academic year.
+              </p>
+              <form onSubmit={handleBulkSubmit} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">Term <span className="required">*</span></label>
+                  <select
+                    value={bulkFormData.term}
+                    onChange={(e) => setBulkFormData((prev) => ({ ...prev, term: e.target.value }))}
+                    className="form-control"
+                    required
+                  >
+                    <option value="">Select Term</option>
+                    <option value="Term 1">Term 1</option>
+                    <option value="Term 2">Term 2</option>
+                    <option value="Term 3">Term 3</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Academic Year <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    value={bulkFormData.academic_year}
+                    onChange={(e) => setBulkFormData((prev) => ({ ...prev, academic_year: e.target.value }))}
+                    placeholder="e.g., 2025"
+                    className="form-control"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Start Date</label>
+                  <input
+                    type="date"
+                    value={bulkFormData.start_date}
+                    onChange={(e) => setBulkFormData((prev) => ({ ...prev, start_date: e.target.value }))}
+                    className="form-control"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">End Date</label>
+                  <input
+                    type="date"
+                    value={bulkFormData.end_date}
+                    onChange={(e) => setBulkFormData((prev) => ({ ...prev, end_date: e.target.value }))}
+                    className="form-control"
+                  />
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
+                  <button
+                    type="button"
+                    className="modal-btn modal-btn-cancel"
+                    onClick={() => {
+                      setShowBulkModal(false);
+                      resetBulkForm();
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="modal-btn modal-btn-confirm">
+                    Populate All Classes
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* View Modal */}
       {showViewModal && selectedRecord && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white border border-gray-200 p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h2 className="text-sm font-bold mb-4">Class Term Year Details</h2>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+        <div className="modal-overlay" onClick={() => setShowViewModal(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Class Term Year Details</h3>
+              <button type="button" className="modal-close-btn" onClick={() => setShowViewModal(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', fontSize: '0.8rem' }}>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">Class</label>
-                  <p className="text-xs text-gray-900">{selectedRecord.class_name}</p>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Class</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.class_name}</div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">Stream</label>
-                  <p className="text-xs text-gray-900">{selectedRecord.stream_name}</p>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Stream</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.stream_name}</div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">Term</label>
-                  <p className="text-xs text-gray-900">{selectedRecord.term}</p>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Term</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.term}</div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">Academic Year</label>
-                  <p className="text-xs text-gray-900">{selectedRecord.academic_year}</p>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Academic Year</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.academic_year}</div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">Start Date</label>
-                  <p className="text-xs text-gray-900">{selectedRecord.start_date || '-'}</p>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Start Date</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.start_date || '-'}</div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">End Date</label>
-                  <p className="text-xs text-gray-900">{selectedRecord.end_date || '-'}</p>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>End Date</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.end_date || '-'}</div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-700">Status</label>
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold ${
-                    selectedRecord.is_active 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {selectedRecord.is_active ? 'Active' : 'Inactive'}
-                  </span>
+                  <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>Status</span>
+                  <div style={{ color: 'var(--text-primary)', marginTop: '4px' }}>{selectedRecord.is_active ? 'Active' : 'Inactive'}</div>
                 </div>
               </div>
             </div>
-
-            <div className="flex justify-end pt-4">
-              <button
-                onClick={() => setShowViewModal(false)}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium text-white bg-gray-700 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
+            <div className="modal-footer">
+              <button type="button" className="modal-btn modal-btn-cancel" onClick={() => setShowViewModal(false)}>
                 Close
               </button>
             </div>
@@ -397,15 +492,11 @@ const ClassTermYear = () => {
         </div>
       )}
 
-
-      {/* Success Modal */}
       <SuccessModal
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}
         message={successMessage}
       />
-
-      {/* Error Modal */}
       <ErrorModal
         isOpen={showErrorModal}
         onClose={() => setShowErrorModal(false)}

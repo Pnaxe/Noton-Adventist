@@ -9,6 +9,7 @@ const Login = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showMaintenance, setShowMaintenance] = useState(false);
     const navigate = useNavigate();
     const { login, isAuthenticated } = useAuth();
 
@@ -36,6 +37,23 @@ const Login = () => {
             setLoading(false);
         }
     };
+
+    if (showMaintenance) {
+        return (
+            <div className="login-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: '1.5rem', padding: '2rem' }}>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#333', margin: 0 }}>Website under maintenance</h2>
+                <p style={{ color: '#666', margin: 0 }}>Please check back later.</p>
+                <button
+                    type="button"
+                    onClick={() => setShowMaintenance(false)}
+                    className="login-submit-btn"
+                    style={{ marginTop: '0.5rem' }}
+                >
+                    Back
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className="login-page">
@@ -69,9 +87,13 @@ const Login = () => {
                                 <span className="login-promo-muted">Mon–Fri, 08:00–17:00</span>
                             </div>
                         </div>
-                        <a href="https://praxis.co.zw" target="_blank" rel="noopener noreferrer" className="login-promo-dev-link">
+                        <button
+                            type="button"
+                            className="login-promo-dev-link"
+                            onClick={() => setShowMaintenance(true)}
+                        >
                             Developed by Praxis — visit our website
-                        </a>
+                        </button>
                     </div>
                 </div>
 
