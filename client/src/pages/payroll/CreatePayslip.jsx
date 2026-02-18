@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faArrowLeft,
@@ -18,6 +19,7 @@ const CreatePayslip = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   
   // Create payslip form
   const [payslipForm, setPayslipForm] = useState({
@@ -163,17 +165,22 @@ const CreatePayslip = () => {
         });
         setShowAddBankAccount(false);
         setSuccess('Bank account added successfully!');
+        showToast('Bank account added successfully!', 'success');
         
         // Clear success message after 3 seconds
         setTimeout(() => {
           setSuccess(null);
         }, 3000);
       } else {
-        setError(response.data.error || 'Failed to add bank account');
+        const errorMsg = response.data.error || 'Failed to add bank account';
+        setError(errorMsg);
+        showToast(errorMsg, 'error');
       }
     } catch (err) {
       console.error('Error adding bank account:', err);
-      setError(err.response?.data?.error || 'Failed to add bank account');
+      const errorMsg = err.response?.data?.error || 'Failed to add bank account';
+      setError(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -252,6 +259,7 @@ const CreatePayslip = () => {
       
       if (response.data.success) {
         setSuccess('Payslip created successfully!');
+        showToast('Payslip created successfully!', 'success');
         
         // Reset form
         setPayslipForm({
@@ -278,11 +286,15 @@ const CreatePayslip = () => {
           navigate('/dashboard/payroll');
         }, 2000);
       } else {
-        setError(response.data.message || 'Failed to create payslip');
+        const errorMsg = response.data.message || 'Failed to create payslip';
+        setError(errorMsg);
+        showToast(errorMsg, 'error');
       }
     } catch (err) {
       console.error('Error creating payslip:', err);
-      setError(err.response?.data?.message || 'Failed to create payslip');
+      const errorMsg = err.response?.data?.message || 'Failed to create payslip';
+      setError(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -301,6 +313,11 @@ const CreatePayslip = () => {
   };
 
   const formatCurrency = (amount, currencyCode) => {
+    // Return just "0" if amount is 0
+    if (amount === 0 || amount === '0' || parseFloat(amount) === 0) {
+      return '0';
+    }
+    
     const currency = currencies.find(c => c.code === currencyCode);
     if (!currency) return amount;
     
@@ -314,6 +331,60 @@ const CreatePayslip = () => {
   const getCurrencySymbol = (currencyCode) => {
     const currency = currencies.find(c => c.code === currencyCode);
     return currency ? currency.symbol : currencyCode;
+  };
+
+  // Toast notification functions
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+    
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      default: return '#10b981';
+    }
   };
 
   return (
@@ -695,7 +766,7 @@ const CreatePayslip = () => {
                   </div>
                   <div className="flex justify-between border-t border-gray-200 pt-3">
                     <span className="font-semibold text-gray-900">Net Pay:</span>
-                    <span className="font-bold text-green-600 text-lg">{formatCurrency(calculateNetPay(), payslipForm.currency)}</span>
+                    <span className="font-bold text-green-600 text-lg">{formatCurrency(calculateNetPay(), payslipForm.currency || 'USD')}</span>
                   </div>
                 </div>
               </div>
@@ -735,6 +806,20 @@ const CreatePayslip = () => {
           </button>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast">
+          <div 
+            className="success-toast-content" 
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

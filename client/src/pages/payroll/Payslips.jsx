@@ -267,7 +267,7 @@ const Payslips = () => {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text('NET PAY', 25, yPosition + 8);
-      doc.text(formatCurrency(payslip.net_pay, payslip.currency), 150, yPosition + 8);
+      doc.text(formatCurrency(payslip.net_pay, payslip.currency || 'USD'), 150, yPosition + 8);
       doc.setTextColor(0, 0, 0);
       
       // Notes
@@ -303,6 +303,11 @@ const Payslips = () => {
   };
 
   const formatCurrency = (amount, currencyCode = 'KES') => {
+    // Return just "0" if amount is 0
+    if (amount === 0 || amount === '0' || parseFloat(amount) === 0) {
+      return '0';
+    }
+    
     const currency = currencies.find(c => c.code === currencyCode);
     if (!currency) {
       return new Intl.NumberFormat('en-KE', {
@@ -560,7 +565,7 @@ const Payslips = () => {
                     {formatCurrency(payslip.total_deductions, payslip.currency)}
                   </td>
                   <td style={{ padding: '4px 10px', fontWeight: 600, color: '#10b981' }}>
-                    {formatCurrency(payslip.net_pay, payslip.currency)}
+                    {formatCurrency(payslip.net_pay, payslip.currency || 'USD')}
                   </td>
                   <td style={{ padding: '4px 10px' }}>
                     <span style={{
@@ -761,7 +766,7 @@ const Payslips = () => {
                 <div className="bg-gray-700 text-white font-bold p-3">
                   <div className="flex justify-between items-center">
                     <div className="text-sm">NET PAY</div>
-                    <div className="text-sm">{formatCurrency(selectedPayslip.net_pay, selectedPayslip.currency)}</div>
+                    <div className="text-sm">{formatCurrency(selectedPayslip.net_pay, selectedPayslip.currency || 'USD')}</div>
                   </div>
                 </div>
 

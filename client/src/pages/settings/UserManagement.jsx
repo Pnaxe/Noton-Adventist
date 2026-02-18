@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
   faPlus, 
@@ -12,7 +13,9 @@ import {
   faCheckCircle,
   faTimesCircle,
   faUserShield,
-  faBan
+  faBan,
+  faExclamationTriangle,
+  faTimes
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import BASE_URL from '../../contexts/Api';
@@ -27,7 +30,10 @@ const UserManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewRolesModal, setShowViewRolesModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   // Fetch users from API
   const fetchUsers = async () => {
@@ -77,57 +83,125 @@ const UserManagement = () => {
     setShowViewRolesModal(true);
   };
 
-  const handleDeactivateUser = async (userId) => {
-    const user = users.find(u => u.id === userId);
-    const action = user.is_active ? 'deactivate' : 'activate';
-    if (window.confirm(`Are you sure you want to ${action} this user?`)) {
-      try {
-        await axios.patch(`${BASE_URL}/management/users/${userId}/toggle-status`, {}, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+  const handleDeactivateUserClick = (user) => {
+    setSelectedUser(user);
+    setShowDeactivateModal(true);
+  };
 
-        // Update local state
-        setUsers(users.map(u => 
-          u.id === userId 
-            ? { ...u, is_active: !u.is_active }
-            : u
-        ));
-      } catch (err) {
-        console.error('Error toggling user status:', err);
-        setError('Failed to update user status');
-      }
+  const handleDeactivateUser = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      await axios.patch(`${BASE_URL}/management/users/${selectedUser.id}/toggle-status`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Update local state
+      setUsers(users.map(u => 
+        u.id === selectedUser.id 
+          ? { ...u, is_active: !u.is_active }
+          : u
+      ));
+      
+      const action = selectedUser.is_active ? 'deactivated' : 'activated';
+      showToast(`User ${action} successfully`, 'success');
+      setShowDeactivateModal(false);
+      setSelectedUser(null);
+    } catch (err) {
+      console.error('Error toggling user status:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to update user status';
+      showToast(errorMsg, 'error');
     }
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      try {
-        await axios.delete(`${BASE_URL}/management/users/${userId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+  const handleDeleteUserClick = (user) => {
+    setSelectedUser(user);
+    setShowDeleteModal(true);
+  };
 
-        // Update local state
-        setUsers(users.filter(user => user.id !== userId));
-      } catch (err) {
-        console.error('Error deleting user:', err);
-        if (err.response?.data?.error) {
-          setError(err.response.data.error);
-        } else {
-          setError('Failed to delete user');
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    
+    try {
+      await axios.delete(`${BASE_URL}/management/users/${selectedUser.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
-      }
+      });
+
+      // Update local state
+      setUsers(users.filter(user => user.id !== selectedUser.id));
+      showToast('User deleted successfully', 'success');
+      setShowDeleteModal(false);
+      setSelectedUser(null);
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      const errorMsg = err.response?.data?.error || 'Failed to delete user';
+      showToast(errorMsg, 'error');
     }
   };
 
   // Helper function to check if user is system admin
   const isSysAdmin = (user) => {
     return user.username === 'sysadmin';
+  };
+
+  // Toast notification functions
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+    
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      default: return '#10b981';
+    }
   };
 
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
@@ -355,7 +429,7 @@ const UserManagement = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleDeactivateUser(user.id)}
+                          onClick={() => handleDeactivateUserClick(user)}
                           style={{ color: user.is_active ? '#f59e0b' : '#10b981', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                           title={user.is_active ? 'Deactivate User' : 'Activate User'}
                         >
@@ -373,7 +447,7 @@ const UserManagement = () => {
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => handleDeleteUserClick(user)}
                           style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                           title="Delete User"
                         >
@@ -445,7 +519,7 @@ const UserManagement = () => {
           isOpen={showAddModal}
           onClose={() => setShowAddModal(false)}
           user={null}
-          onSave={async (userData) => {
+              onSave={async (userData) => {
             try {
               const response = await axios.post(`${BASE_URL}/management/users`, userData, {
                 headers: {
@@ -458,9 +532,11 @@ const UserManagement = () => {
               // Refresh users list
               fetchUsers();
               setShowAddModal(false);
+              showToast('User created successfully', 'success');
             } catch (err) {
               console.error('Error creating user:', err);
-              // Handle error in the modal component
+              const errorMsg = err.response?.data?.error || 'Failed to create user';
+              showToast(errorMsg, 'error');
               throw err;
             }
           }}
@@ -473,7 +549,7 @@ const UserManagement = () => {
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
           user={selectedUser}
-          onSave={async (userData) => {
+              onSave={async (userData) => {
             try {
               const response = await axios.put(`${BASE_URL}/management/users/${selectedUser.id}`, userData, {
                 headers: {
@@ -486,9 +562,11 @@ const UserManagement = () => {
               // Refresh users list
               fetchUsers();
               setShowEditModal(false);
+              showToast('User updated successfully', 'success');
             } catch (err) {
               console.error('Error updating user:', err);
-              // Handle error in the modal component
+              const errorMsg = err.response?.data?.error || 'Failed to update user';
+              showToast(errorMsg, 'error');
               throw err;
             }
           }}
@@ -502,6 +580,46 @@ const UserManagement = () => {
           onClose={() => setShowViewRolesModal(false)}
           user={selectedUser}
         />
+      )}
+
+      {/* Deactivate User Modal */}
+      {showDeactivateModal && selectedUser && (
+        <DeactivateUserModal
+          isOpen={showDeactivateModal}
+          onClose={() => {
+            setShowDeactivateModal(false);
+            setSelectedUser(null);
+          }}
+          user={selectedUser}
+          onConfirm={handleDeactivateUser}
+        />
+      )}
+
+      {/* Delete User Modal */}
+      {showDeleteModal && selectedUser && (
+        <DeleteUserModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false);
+            setSelectedUser(null);
+          }}
+          user={selectedUser}
+          onConfirm={handleDeleteUser}
+        />
+      )}
+
+      {/* Toast Notification */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast">
+          <div 
+            className="success-toast-content" 
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -820,7 +938,7 @@ const UserModal = ({ isOpen, onClose, user, onSave }) => {
 const ViewRolesModal = ({ isOpen, onClose, user }) => {
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div 
         className="modal-dialog" 
@@ -901,7 +1019,188 @@ const ViewRolesModal = ({ isOpen, onClose, user }) => {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
+  );
+};
+
+// Deactivate User Modal Component
+const DeactivateUserModal = ({ isOpen, onClose, user, onConfirm }) => {
+  if (!isOpen) return null;
+
+  const action = user.is_active ? 'deactivate' : 'activate';
+  const actionText = user.is_active ? 'Deactivate' : 'Activate';
+
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose}>
+      <div 
+        className="modal-dialog" 
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '500px' }}
+      >
+        <div className="modal-header">
+          <h3 className="modal-title">{actionText} User</h3>
+          <button className="modal-close-btn" onClick={onClose}>
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: user.is_active ? '#fef3c7' : '#dbeafe',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <FontAwesomeIcon 
+                icon={user.is_active ? faBan : faCheckCircle} 
+                style={{ 
+                  fontSize: '1.5rem',
+                  color: user.is_active ? '#f59e0b' : '#2563eb'
+                }} 
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500, marginBottom: '4px' }}>
+                Are you sure you want to {action} this user?
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Username: <strong>{user.username}</strong>
+              </p>
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '12px',
+            background: user.is_active ? '#fef2f2' : '#f0fdf4',
+            border: `1px solid ${user.is_active ? '#fecaca' : '#bbf7d0'}`,
+            borderRadius: '6px',
+            marginTop: '16px'
+          }}>
+            <p style={{ fontSize: '0.75rem', color: user.is_active ? '#991b1b' : '#166534', margin: 0 }}>
+              {user.is_active 
+                ? 'This user will be deactivated and will not be able to log in to the system.'
+                : 'This user will be activated and will be able to log in to the system.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button
+            type="button"
+            className="modal-btn modal-btn-cancel"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="modal-btn modal-btn-confirm"
+            onClick={onConfirm}
+            style={{
+              background: user.is_active ? '#f59e0b' : '#10b981'
+            }}
+          >
+            {actionText} User
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// Delete User Modal Component
+const DeleteUserModal = ({ isOpen, onClose, user, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="modal-overlay" onClick={onClose}>
+      <div 
+        className="modal-dialog" 
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '500px' }}
+      >
+        <div className="modal-header">
+          <h3 className="modal-title">Delete User</h3>
+          <button className="modal-close-btn" onClick={onClose}>
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+
+        <div className="modal-body">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: '#fee2e2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <FontAwesomeIcon 
+                icon={faExclamationTriangle} 
+                style={{ 
+                  fontSize: '1.5rem',
+                  color: '#dc2626'
+                }} 
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', fontWeight: 500, marginBottom: '4px' }}>
+                Are you sure you want to delete this user?
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Username: <strong>{user.username}</strong>
+              </p>
+            </div>
+          </div>
+          
+          <div style={{
+            padding: '12px',
+            background: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: '6px',
+            marginTop: '16px'
+          }}>
+            <p style={{ fontSize: '0.75rem', color: '#991b1b', margin: 0, fontWeight: 500 }}>
+              ⚠️ Warning: This action cannot be undone.
+            </p>
+            <p style={{ fontSize: '0.75rem', color: '#991b1b', margin: '8px 0 0 0' }}>
+              All user data and associated records will be permanently deleted.
+            </p>
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button
+            type="button"
+            className="modal-btn modal-btn-cancel"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="modal-btn modal-btn-confirm"
+            onClick={onConfirm}
+            style={{
+              background: '#dc2626'
+            }}
+          >
+            Delete User
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 };
 

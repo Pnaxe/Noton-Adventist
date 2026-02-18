@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faUser,
@@ -29,7 +30,10 @@ import {
   faUserPlus,
   faSchool,
   faCalendarCheck,
-  faChevronDown
+  faChevronDown,
+  faEye,
+  faEyeSlash,
+  faTimes
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useSports } from '../contexts/SportsContext';
@@ -39,10 +43,12 @@ import { useBilling } from '../contexts/BillingContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useBoarding } from '../contexts/BoardingContext';
 import { useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
+import BASE_URL from '../contexts/Api';
 import logo from '../assets/norton_logo.png';
 
 const Header = ({ onMenuClick }) => {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -51,6 +57,19 @@ const Header = ({ onMenuClick }) => {
   const [accountingVisibleCount, setAccountingVisibleCount] = useState(6);
   const [accountingMoreOpen, setAccountingMoreOpen] = useState(false);
   const [billingVisibleCount, setBillingVisibleCount] = useState(6);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordFormData, setPasswordFormData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false
+  });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [billingMoreOpen, setBillingMoreOpen] = useState(false);
   const [sportsVisibleCount, setSportsVisibleCount] = useState(4);
   const [sportsMoreOpen, setSportsMoreOpen] = useState(false);
@@ -337,6 +356,153 @@ const Header = ({ onMenuClick }) => {
   }, [location.pathname, isSportsPage, isAccountingPage, isBillingPage, isSettingsPage, isBoardingPage, isClassesPage]);
 
   const useDropdown = isSmallScreen || isMenuOverflowing;
+
+  // Toast notification functions
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+    
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    switch (type) {
+      case 'success': return '#10b981';
+      case 'error': return '#ef4444';
+      default: return '#10b981';
+    }
+  };
+
+  // Password change handlers
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const togglePasswordVisibility = (field) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+
+  const validatePasswordForm = () => {
+    if (!passwordFormData.currentPassword) {
+      showToast('Current password is required', 'error');
+      return false;
+    }
+    if (!passwordFormData.newPassword) {
+      showToast('New password is required', 'error');
+      return false;
+    }
+    if (passwordFormData.newPassword.length < 6) {
+      showToast('New password must be at least 6 characters long', 'error');
+      return false;
+    }
+    if (passwordFormData.newPassword !== passwordFormData.confirmPassword) {
+      showToast('New passwords do not match', 'error');
+      return false;
+    }
+    if (passwordFormData.currentPassword === passwordFormData.newPassword) {
+      showToast('New password must be different from current password', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validatePasswordForm()) return;
+
+    setPasswordLoading(true);
+
+    try {
+      const response = await axios.put(`${BASE_URL}/auth/change-password`, {
+        currentPassword: passwordFormData.currentPassword,
+        newPassword: passwordFormData.newPassword
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('✅ Password changed successfully:', response.data);
+      showToast('Password changed successfully!', 'success');
+      setPasswordFormData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setShowPasswordModal(false);
+
+    } catch (err) {
+      console.error('Error changing password:', err);
+      
+      if (err.response?.data?.error) {
+        showToast(err.response.data.error, 'error');
+      } else if (err.response?.status === 401) {
+        showToast('Current password is incorrect', 'error');
+      } else if (err.response?.status === 400) {
+        showToast('Invalid password format', 'error');
+      } else {
+        showToast('Failed to change password. Please try again.', 'error');
+      }
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleClosePasswordModal = () => {
+    setPasswordFormData({
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    });
+    setShowPasswordModal(false);
+  };
 
   const handleLogout = () => {
     logout();
@@ -887,8 +1053,7 @@ const Header = ({ onMenuClick }) => {
           }} ref={topNavMenuRef}>
             {[
               { id: 'users', label: 'User Management', icon: faUsers },
-              { id: 'roles', label: 'Role Management', icon: faUserShield },
-              { id: 'password', label: 'Change Password', icon: faKey }
+              { id: 'roles', label: 'Role Management', icon: faUserShield }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -1178,7 +1343,6 @@ const Header = ({ onMenuClick }) => {
                 >
                   <option value="users">User Management</option>
                   <option value="roles">Role Management</option>
-                  <option value="password">Change Password</option>
                 </select>
               )}
               {isBillingPage && isSmallScreen && (
@@ -1237,17 +1401,7 @@ const Header = ({ onMenuClick }) => {
                   <button
                     className="dropdown-item"
                     onClick={() => {
-                      navigate('/dashboard/settings');
-                      setShowDropdown(false);
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faUser} className="dropdown-icon" />
-                    <span>Profile</span>
-                  </button>
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      navigate('/dashboard/settings');
+                      setShowPasswordModal(true);
                       setShowDropdown(false);
                     }}
                   >
@@ -1267,6 +1421,155 @@ const Header = ({ onMenuClick }) => {
           </div>
         </div>
       </div>
+
+      {/* Password Change Modal - Rendered via Portal to ensure it covers sidebar */}
+      {showPasswordModal && createPortal(
+        <div className="modal-overlay" onClick={handleClosePasswordModal}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Change Password</h3>
+              <button className="modal-close-btn" onClick={handleClosePasswordModal}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                {/* Current Password */}
+                <div>
+                  <label htmlFor="currentPassword" className="block text-xs font-medium text-gray-600 mb-1">
+                    Current Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.current ? 'text' : 'password'}
+                      name="currentPassword"
+                      id="currentPassword"
+                      required
+                      value={passwordFormData.currentPassword}
+                      onChange={handlePasswordChange}
+                      className="block w-full border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 text-sm pr-10"
+                      placeholder="Enter your current password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => togglePasswordVisibility('current')}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      <FontAwesomeIcon 
+                        icon={showPasswords.current ? faEyeSlash : faEye} 
+                        className="h-4 w-4 text-gray-400 hover:text-gray-600"
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label htmlFor="newPassword" className="block text-xs font-medium text-gray-600 mb-1">
+                    New Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.new ? 'text' : 'password'}
+                      name="newPassword"
+                      id="newPassword"
+                      required
+                      value={passwordFormData.newPassword}
+                      onChange={handlePasswordChange}
+                      className="block w-full border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 text-sm pr-10"
+                      placeholder="Enter your new password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => togglePasswordVisibility('new')}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      <FontAwesomeIcon 
+                        icon={showPasswords.new ? faEyeSlash : faEye} 
+                        className="h-4 w-4 text-gray-400 hover:text-gray-600"
+                      />
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Password must be at least 6 characters long
+                  </p>
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label htmlFor="confirmPassword" className="block text-xs font-medium text-gray-600 mb-1">
+                    Confirm New Password <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPasswords.confirm ? 'text' : 'password'}
+                      name="confirmPassword"
+                      id="confirmPassword"
+                      required
+                      value={passwordFormData.confirmPassword}
+                      onChange={handlePasswordChange}
+                      className="block w-full border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-gray-500 focus:border-gray-500 text-sm pr-10"
+                      placeholder="Confirm your new password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => togglePasswordVisibility('confirm')}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      <FontAwesomeIcon 
+                        icon={showPasswords.confirm ? faEyeSlash : faEye} 
+                        className="h-4 w-4 text-gray-400 hover:text-gray-600"
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Submit Button */}
+                <div className="pt-2 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClosePasswordModal}
+                    className="modal-btn modal-btn-cancel"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={passwordLoading}
+                    className={`modal-btn modal-btn-confirm ${
+                      passwordLoading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {passwordLoading ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Changing...
+                      </div>
+                    ) : (
+                      'Change Password'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Toast Notification - Rendered via Portal */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast">
+          <div 
+            className="success-toast-content" 
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </nav>
   );
 };

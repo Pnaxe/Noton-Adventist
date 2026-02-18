@@ -26,7 +26,8 @@ import {
   faChartLine,
   faChartPie,
   faSignOutAlt,
-  faHome
+  faHome,
+  faUser
 } from '@fortawesome/free-solid-svg-icons';
 import logo from '../assets/logo(2).png';
 
@@ -70,6 +71,9 @@ const Sidebar = ({ open, setOpen }) => {
 
     // 7. Reporting & Analytics
     { name: 'Analytics', href: '/dashboard/analytics/expense-analysis', icon: faChartPie },
+
+    // 8. User Management
+    { name: 'Users', href: '/dashboard/settings', icon: faUser },
   ];
 
   // Always show main sections - static menu
@@ -105,6 +109,11 @@ const Sidebar = ({ open, setOpen }) => {
         path: '/dashboard/boarding',
         tabId: 'allocation',
         setTab: boardingContext?.setActiveTab
+      },
+      'Users': {
+        path: '/dashboard/settings',
+        tabId: 'users',
+        setTab: settingsContext?.setActiveTab
       }
     };
 
