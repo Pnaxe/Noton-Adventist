@@ -4,8 +4,8 @@ import BASE_URL from '../../../contexts/Api';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faFileAlt, 
+import {
+  faFileAlt,
   faDollarSign,
   faEye
 } from '@fortawesome/free-solid-svg-icons';
@@ -95,25 +95,25 @@ const ChartOfAccounts = () => {
     }
   };
 
-  // Auto-generate code when type changes
+  // Auto-generate code when type changes; clear parent if it no longer matches type
   useEffect(() => {
     if (!addForm.type) {
-      setAddForm((prev) => ({ ...prev, code: '' }));
+      setAddForm((prev) => ({ ...prev, code: '', parent_id: '' }));
       return;
     }
     const prefix = TYPE_PREFIX[addForm.type];
-    // Find highest code for this type
     const codes = accounts
       .filter((acc) => acc.type === addForm.type && acc.code && acc.code.startsWith(prefix))
       .map((acc) => parseInt(acc.code, 10))
       .filter((num) => !isNaN(num));
-    let nextCode;
-    if (codes.length === 0) {
-      nextCode = prefix + '000';
-    } else {
-      nextCode = (Math.max(...codes) + 1).toString();
-    }
-    setAddForm((prev) => ({ ...prev, code: nextCode }));
+    const nextCode = codes.length === 0 ? prefix + '000' : (Math.max(...codes) + 1).toString();
+    const parent = addForm.parent_id ? accounts.find((a) => a.id === Number(addForm.parent_id)) : null;
+    const parentOk = !parent || parent.type === addForm.type;
+    setAddForm((prev) => ({
+      ...prev,
+      code: nextCode,
+      parent_id: parentOk ? prev.parent_id : ''
+    }));
     // eslint-disable-next-line
   }, [addForm.type, accounts]);
 
@@ -201,7 +201,7 @@ const ChartOfAccounts = () => {
     setOpeningBalanceLoading(true);
     setOpeningBalanceError('');
     setSuccess('');
-    
+
     try {
       const payload = {
         ...openingBalanceForm,
@@ -311,13 +311,13 @@ const ChartOfAccounts = () => {
   };
 
   return (
-    <div className="reports-container" style={{ 
-      height: '100%', 
-      maxHeight: '100%', 
-      overflow: 'hidden', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      position: 'relative' 
+    <div className="reports-container" style={{
+      height: '100%',
+      maxHeight: '100%',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative'
     }}>
       {/* Report Header */}
       <div className="report-header" style={{ flexShrink: 0 }}>
@@ -327,7 +327,11 @@ const ChartOfAccounts = () => {
         </div>
         <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              setAddForm({ code: '', name: '', type: '', parent_id: '', is_active: true });
+              setAddError('');
+              setShowAddModal(true);
+            }}
             className="btn-checklist"
           >
             + Add Account
@@ -344,86 +348,111 @@ const ChartOfAccounts = () => {
 
       {/* Add Account Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-700 bg-opacity-50">
-          <div className="bg-white border border-gray-300 w-full max-w-md p-0" style={{ borderRadius: 0 }}>
-            <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-              <h2 className="text-xs font-semibold text-gray-800">Add Account</h2>
-              <button className="text-xs text-gray-500 hover:text-gray-800" onClick={() => setShowAddModal(false)} style={{ borderRadius: 0 }}>✕</button>
+        <div
+          className="modal-overlay"
+          onClick={() => !addLoading && setShowAddModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-account-modal-title"
+        >
+          <div
+            className="modal-dialog"
+            style={{ maxWidth: '420px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2 id="add-account-modal-title" className="modal-title">Add Account</h2>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => !addLoading && setShowAddModal(false)}
+                disabled={addLoading}
+                aria-label="Close"
+              >
+                ✕
+              </button>
             </div>
-            <form className="px-6 py-4" onSubmit={handleAddSubmit}>
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Code <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  name="code"
-                  value={addForm.code}
-                  readOnly
-                  className="w-full border border-gray-300 px-2 py-1 text-xs text-gray-900 bg-gray-100 focus:outline-none focus:ring-gray-900 focus:border-gray-900"
-                  style={{ borderRadius: 0 }}
-                  required
-                />
+            <form className="modal-form" onSubmit={handleAddSubmit} style={{ border: 'none', padding: '16px', gap: '16px' }}>
+              <div className="modal-body" style={{ padding: 0, maxHeight: 'none', boxShadow: 'none' }}>
+                {addError && (
+                  <div className="form-group" style={{ marginBottom: 8 }}>
+                    <div style={{ padding: '10px 12px', background: '#fee2e2', color: '#dc2626', fontSize: '0.8rem', borderRadius: 4 }}>
+                      {addError}
+                    </div>
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">Code <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    name="code"
+                    value={addForm.code}
+                    readOnly
+                    className="form-control"
+                    style={{ background: 'var(--main-bg)', cursor: 'not-allowed' }}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Name <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={addForm.name}
+                    onChange={handleAddChange}
+                    className="form-control"
+                    placeholder="Account name"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Type <span className="required">*</span></label>
+                  <select
+                    name="type"
+                    value={addForm.type}
+                    onChange={handleAddChange}
+                    className="form-control"
+                    required
+                  >
+                    <option value="">Select type</option>
+                    {ACCOUNT_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Parent Account</label>
+                  <select
+                    name="parent_id"
+                    value={addForm.parent_id}
+                    onChange={handleAddChange}
+                    className="form-control"
+                  >
+                    <option value="">None</option>
+                    {(addForm.type
+                      ? accounts.filter((acc) => acc.type === addForm.type)
+                      : accounts
+                    ).map((acc) => (
+                      <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    name="is_active"
+                    checked={addForm.is_active}
+                    onChange={handleAddChange}
+                    id="add-account-is_active"
+                    style={{ width: 'auto', height: 'auto' }}
+                  />
+                  <label htmlFor="add-account-is_active" className="form-label" style={{ margin: 0 }}>Active</label>
+                </div>
               </div>
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Name <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  name="name"
-                  value={addForm.name}
-                  onChange={handleAddChange}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-gray-900 focus:border-gray-900"
-                  style={{ borderRadius: 0 }}
-                  required
-                />
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
-                <select
-                  name="type"
-                  value={addForm.type}
-                  onChange={handleAddChange}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-gray-900 focus:border-gray-900"
-                  style={{ borderRadius: 0 }}
-                  required
-                >
-                  <option value="">Select type</option>
-                  {ACCOUNT_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Parent Account</label>
-                <select
-                  name="parent_id"
-                  value={addForm.parent_id}
-                  onChange={handleAddChange}
-                  className="w-full border border-gray-300 px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-gray-900 focus:border-gray-900"
-                  style={{ borderRadius: 0 }}
-                >
-                  <option value="">None</option>
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id}>{acc.code} - {acc.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-4 flex items-center">
-                <input
-                  type="checkbox"
-                  name="is_active"
-                  checked={addForm.is_active}
-                  onChange={handleAddChange}
-                  className="mr-2 border-gray-300 focus:ring-gray-900"
-                  style={{ borderRadius: 0 }}
-                  id="is_active"
-                />
-                <label htmlFor="is_active" className="text-xs text-gray-700">Active</label>
-              </div>
-              {addError && <div className="text-xs text-red-600 mb-2">{addError}</div>}
-              <div className="flex justify-end">
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px' }}>
                 <button
                   type="button"
-                  className="px-4 py-2 text-xs font-medium text-gray-800 bg-gray-200 hover:bg-gray-300 border border-gray-300 mr-2"
-                  style={{ borderRadius: 0 }}
+                  className="modal-btn modal-btn-cancel"
                   onClick={() => setShowAddModal(false)}
                   disabled={addLoading}
                 >
@@ -431,8 +460,7 @@ const ChartOfAccounts = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-xs font-medium text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900"
-                  style={{ borderRadius: 0 }}
+                  className="modal-btn modal-btn-confirm"
                   disabled={addLoading}
                 >
                   {addLoading ? 'Saving...' : 'Save'}
@@ -451,11 +479,11 @@ const ChartOfAccounts = () => {
       )}
 
       {/* Table Container */}
-      <div className="report-content-container ecl-table-container" style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        flex: 1, 
-        overflow: 'auto', 
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
         minHeight: 0,
         padding: 0,
         height: '100%'
@@ -480,11 +508,11 @@ const ChartOfAccounts = () => {
           </div>
         ) : (
           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-            <thead style={{ 
-              position: 'sticky', 
-              top: 0, 
-              zIndex: 10, 
-              background: 'var(--sidebar-bg)' 
+            <thead style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'var(--sidebar-bg)'
             }}>
               <tr>
                 <th style={{ padding: '6px 10px' }}>CODE</th>
@@ -492,16 +520,16 @@ const ChartOfAccounts = () => {
                 <th style={{ padding: '6px 10px' }}>TYPE</th>
                 <th style={{ padding: '6px 10px' }}>PARENT</th>
                 <th style={{ padding: '6px 10px' }}>STATUS</th>
-                 <th style={{ padding: '6px 10px', width: '100px' }}>ACTIONS</th>
+                <th style={{ padding: '6px 10px', width: '100px' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {accounts.map((acc, index) => (
-                <tr 
+                <tr
                   key={acc.id}
-                  style={{ 
-                    height: '32px', 
-                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                  style={{
+                    height: '32px',
+                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
                   }}
                 >
                   <td style={{ padding: '4px 10px', fontFamily: 'monospace' }}>{acc.code}</td>
@@ -517,11 +545,11 @@ const ChartOfAccounts = () => {
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <button
                         onClick={() => handleViewAccount(acc.id)}
-                        style={{ 
-                          color: '#2563eb', 
-                          background: 'none', 
-                          border: 'none', 
-                          cursor: 'pointer', 
+                        style={{
+                          color: '#2563eb',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
                           padding: 0,
                           fontSize: '0.7rem'
                         }}
@@ -531,11 +559,11 @@ const ChartOfAccounts = () => {
                       </button>
                       <button
                         onClick={() => openOpeningBalanceModal(acc)}
-                        style={{ 
-                          color: '#6366f1', 
-                          background: 'none', 
-                          border: 'none', 
-                          cursor: 'pointer', 
+                        style={{
+                          color: '#6366f1',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
                           padding: 0,
                           fontSize: '0.7rem'
                         }}
@@ -549,11 +577,11 @@ const ChartOfAccounts = () => {
               ))}
               {/* Empty placeholder rows to always show 25 rows */}
               {Array.from({ length: Math.max(0, 25 - accounts.length) }).map((_, index) => (
-                <tr 
+                <tr
                   key={`empty-${index}`}
-                  style={{ 
-                    height: '32px', 
-                    backgroundColor: (accounts.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                  style={{
+                    height: '32px',
+                    backgroundColor: (accounts.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
                   }}
                 >
                   <td style={{ padding: '4px 10px' }}>&nbsp;</td>
@@ -584,9 +612,9 @@ const ChartOfAccounts = () => {
       {/* Opening Balance Modal */}
       {showOpeningBalanceModal && selectedAccount && (
         <div className="modal-overlay" onClick={() => setShowOpeningBalanceModal(false)}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '600px' }}
           >
             <div className="modal-header">
@@ -598,7 +626,7 @@ const ChartOfAccounts = () => {
                 </svg>
               </button>
             </div>
-            
+
             <form onSubmit={handleOpeningBalanceSubmit} className="modal-form">
               <div className="modal-body">
                 {openingBalanceError && (
@@ -617,7 +645,7 @@ const ChartOfAccounts = () => {
                 }}>
                   <p style={{ fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>⚠️ Use This ONLY for Opening Balances</p>
                   <p style={{ color: '#78350f', margin: 0 }}>
-                    This feature is for recording historical balances that existed BEFORE the system was implemented. 
+                    This feature is for recording historical balances that existed BEFORE the system was implemented.
                     Do NOT use this for mid-term adjustments.
                   </p>
                 </div>
@@ -654,8 +682,8 @@ const ChartOfAccounts = () => {
                       <option value="credit">Credit</option>
                     </select>
                     <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      {selectedAccount.type === 'Asset' || selectedAccount.type === 'Expense' 
-                        ? 'Debit = Positive, Credit = Negative' 
+                      {selectedAccount.type === 'Asset' || selectedAccount.type === 'Expense'
+                        ? 'Debit = Positive, Credit = Negative'
                         : 'Credit = Positive, Debit = Negative'}
                     </div>
                   </div>
@@ -749,8 +777,8 @@ const ChartOfAccounts = () => {
                   color: '#1e40af'
                 }}>
                   <p style={{ margin: 0 }}>
-                    <strong>Note:</strong> This will create a journal entry using Retained Earnings (3998) 
-                    as the offsetting account. This ensures historical balances don't affect current period 
+                    <strong>Note:</strong> This will create a journal entry using Retained Earnings (3998)
+                    as the offsetting account. This ensures historical balances don't affect current period
                     financial statements.
                   </p>
                 </div>
@@ -781,9 +809,9 @@ const ChartOfAccounts = () => {
       {/* View Account Modal */}
       {showViewModal && (
         <div className="modal-overlay" onClick={handleCloseViewModal}>
-          <div 
-            className="modal-dialog" 
-            onClick={(e) => e.stopPropagation()} 
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '95vw', maxHeight: '95vh', width: '1200px' }}
           >
             {viewModalLoading ? (
@@ -815,7 +843,7 @@ const ChartOfAccounts = () => {
                     </svg>
                   </button>
                 </div>
-                
+
                 <div className="modal-body" style={{ maxHeight: 'calc(95vh - 120px)', overflowY: 'auto' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                     {/* Account Information Section */}
@@ -824,7 +852,7 @@ const ChartOfAccounts = () => {
                         <FontAwesomeIcon icon={faFileAlt} style={{ color: '#2563eb' }} />
                         Account Information
                       </h4>
-                      
+
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 30px' }}>
                         <div>
                           <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
@@ -834,7 +862,7 @@ const ChartOfAccounts = () => {
                             {viewAccount.code || 'N/A'}
                           </div>
                         </div>
-                        
+
                         <div>
                           <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                             Account Name
@@ -843,7 +871,7 @@ const ChartOfAccounts = () => {
                             {viewAccount.name || 'N/A'}
                           </div>
                         </div>
-                        
+
                         <div>
                           <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                             Account Type
@@ -852,7 +880,7 @@ const ChartOfAccounts = () => {
                             {viewAccount.type || 'N/A'}
                           </div>
                         </div>
-                        
+
                         <div>
                           <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
                             Status
@@ -861,7 +889,7 @@ const ChartOfAccounts = () => {
                             {viewAccount.is_active ? 'Active' : 'Inactive'}
                           </div>
                         </div>
-                        
+
                         {viewParent && (
                           <div style={{ gridColumn: '1 / -1' }}>
                             <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
@@ -882,7 +910,7 @@ const ChartOfAccounts = () => {
                           <FontAwesomeIcon icon={faDollarSign} style={{ color: '#10b981' }} />
                           Account Balances
                         </h4>
-                        
+
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 30px' }}>
                           {viewBalances.map((b) => (
                             <div key={b.currency.id}>
@@ -911,10 +939,10 @@ const ChartOfAccounts = () => {
                       </h4>
 
                       {/* Filters */}
-                      <div style={{ 
-                        padding: '12px', 
-                        background: '#f9fafb', 
-                        border: '1px solid var(--border-color)', 
+                      <div style={{
+                        padding: '12px',
+                        background: '#f9fafb',
+                        border: '1px solid var(--border-color)',
                         borderRadius: '4px',
                         marginBottom: '16px'
                       }}>
@@ -963,8 +991,8 @@ const ChartOfAccounts = () => {
                       </div>
 
                       {/* Transactions Table */}
-                      <div style={{ 
-                        border: '1px solid var(--border-color)', 
+                      <div style={{
+                        border: '1px solid var(--border-color)',
                         borderRadius: '4px',
                         overflow: 'hidden',
                         maxHeight: '400px',
@@ -975,24 +1003,24 @@ const ChartOfAccounts = () => {
                             Loading transactions...
                           </div>
                         ) : viewLedgerEntries.length === 0 ? (
-                          <div style={{ 
-                            display: 'flex', 
+                          <div style={{
+                            display: 'flex',
                             flexDirection: 'column',
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            height: '200px', 
-                            color: '#64748b' 
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: '200px',
+                            color: '#64748b'
                           }}>
                             <FontAwesomeIcon icon={faFileAlt} style={{ fontSize: '2rem', marginBottom: '12px', opacity: 0.5 }} />
                             <div style={{ fontSize: '0.75rem' }}>No transactions found</div>
                           </div>
                         ) : (
                           <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                            <thead style={{ 
-                              position: 'sticky', 
-                              top: 0, 
-                              zIndex: 10, 
-                              background: 'var(--sidebar-bg)' 
+                            <thead style={{
+                              position: 'sticky',
+                              top: 0,
+                              zIndex: 10,
+                              background: 'var(--sidebar-bg)'
                             }}>
                               <tr>
                                 <th style={{ padding: '6px 10px' }}>DATE</th>
@@ -1004,11 +1032,11 @@ const ChartOfAccounts = () => {
                             </thead>
                             <tbody>
                               {viewLedgerEntries.map((entry, index) => (
-                                <tr 
+                                <tr
                                   key={`${entry.source}-${entry.id}`}
-                                  style={{ 
-                                    height: '32px', 
-                                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                                  style={{
+                                    height: '32px',
+                                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
                                   }}
                                 >
                                   <td style={{ padding: '4px 10px' }}>{formatDate(entry.transaction_date)}</td>
@@ -1026,11 +1054,11 @@ const ChartOfAccounts = () => {
                               ))}
                               {/* Empty placeholder rows to always show 25 rows */}
                               {Array.from({ length: Math.max(0, 25 - viewLedgerEntries.length) }).map((_, index) => (
-                                <tr 
+                                <tr
                                   key={`empty-${index}`}
-                                  style={{ 
-                                    height: '32px', 
-                                    backgroundColor: (viewLedgerEntries.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                                  style={{
+                                    height: '32px',
+                                    backgroundColor: (viewLedgerEntries.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
                                   }}
                                 >
                                   <td style={{ padding: '4px 10px' }}>&nbsp;</td>
@@ -1047,16 +1075,16 @@ const ChartOfAccounts = () => {
 
                       {/* Pagination */}
                       {viewLedgerPagination.total_pages > 1 && (
-                        <div style={{ 
-                          display: 'flex', 
-                          justifyContent: 'space-between', 
+                        <div style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
                           alignItems: 'center',
                           marginTop: '16px',
                           paddingTop: '12px',
                           borderTop: '1px solid var(--border-color)'
                         }}>
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                            Showing page {viewLedgerPagination.current_page} of {viewLedgerPagination.total_pages} 
+                            Showing page {viewLedgerPagination.current_page} of {viewLedgerPagination.total_pages}
                             ({viewLedgerPagination.total_records} total entries)
                           </div>
                           <div style={{ display: 'flex', gap: '8px' }}>
@@ -1085,7 +1113,7 @@ const ChartOfAccounts = () => {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="modal-footer">
                   <button className="modal-btn modal-btn-cancel" onClick={handleCloseViewModal}>
                     Close

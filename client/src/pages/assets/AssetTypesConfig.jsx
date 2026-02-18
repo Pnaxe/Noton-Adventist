@@ -1,17 +1,23 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faEdit, faTrash, faSave, faTimes, faBox, faArrowLeft } from '@fortawesome/free-solid-svg-icons';
+import { faPlus, faEdit, faTrash, faBox, faArrowLeft, faSearch } from '@fortawesome/free-solid-svg-icons';
+import BASE_URL from '../../contexts/Api';
+import { useAuth } from '../../contexts/AuthContext';
 
 const AssetTypesConfig = () => {
+  const { token } = useAuth();
+  const navigate = useNavigate();
   const [assetTypes, setAssetTypes] = useState([]);
   const [chartOfAccounts, setChartOfAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingType, setEditingType] = useState(null);
+  const [addLoading, setAddLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -32,15 +38,18 @@ const AssetTypesConfig = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/assets/types', {
+      const response = await axios.get(`${BASE_URL}/assets/types`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setAssetTypes(response.data.data || []);
-      setError('');
+      if (response.data.success) {
+        setAssetTypes(response.data.data || []);
+        setError('');
+      } else {
+        setError('Failed to fetch asset types.');
+      }
     } catch (err) {
       console.error('Error fetching asset types:', err);
-      setError('Failed to fetch asset types');
+      setError('Failed to fetch asset types.');
     } finally {
       setLoading(false);
     }
@@ -48,11 +57,12 @@ const AssetTypesConfig = () => {
 
   const fetchChartOfAccounts = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/accounting/chart-of-accounts', {
+      const response = await axios.get(`${BASE_URL}/accounting/chart-of-accounts`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setChartOfAccounts(response.data.data || []);
+      if (response.data.success) {
+        setChartOfAccounts(response.data.data || []);
+      }
     } catch (err) {
       console.error('Error fetching chart of accounts:', err);
     }
@@ -102,32 +112,35 @@ const AssetTypesConfig = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    setAddLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
       const url = editingType
-        ? `http://localhost:5000/api/assets/types/${editingType.id}`
-        : 'http://localhost:5000/api/assets/types';
-      
+        ? `${BASE_URL}/assets/types/${editingType.id}`
+        : `${BASE_URL}/assets/types`;
+
       const method = editingType ? 'put' : 'post';
-      
-      await axios[method](url, formData, {
+
+      const response = await axios[method](url, formData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      setSuccess(editingType ? 'Asset type updated successfully' : 'Asset type created successfully');
-      setShowAddModal(false);
-      fetchData();
-      
-      setTimeout(() => setSuccess(''), 3000);
+      if (response.data.success) {
+        setSuccess(editingType ? 'Asset type updated successfully' : 'Asset type created successfully');
+        setShowAddModal(false);
+        setEditingType(null);
+        await fetchData();
+        setTimeout(() => setSuccess(''), 3000);
+      } else {
+        setError(response.data.error || 'Failed to save asset type.');
+      }
     } catch (err) {
       console.error('Error saving asset type:', err);
-      setError(err.response?.data?.error || 'Failed to save asset type');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to save asset type.');
     } finally {
-      setLoading(false);
+      setAddLoading(false);
     }
   };
 
@@ -138,311 +151,439 @@ const AssetTypesConfig = () => {
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/assets/types/${id}`, {
+      await axios.delete(`${BASE_URL}/assets/types/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
       setSuccess('Asset type deleted successfully');
-      fetchData();
+      await fetchData();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Error deleting asset type:', err);
-      setError(err.response?.data?.error || 'Failed to delete asset type');
+      setError(err.response?.data?.error || err.response?.data?.message || 'Failed to delete asset type.');
     } finally {
       setLoading(false);
     }
   };
 
   const getAssetAccounts = () => {
-    return chartOfAccounts.filter(acc => 
+    return chartOfAccounts.filter(acc =>
       acc.type === 'Asset' && acc.is_active
     );
   };
 
   const getExpenseAccounts = () => {
-    return chartOfAccounts.filter(acc => 
+    return chartOfAccounts.filter(acc =>
       acc.type === 'Expense' && acc.is_active
     );
   };
 
-  if (loading && assetTypes.length === 0) {
-    return (
-      <div className="p-4">
-        <div className="text-center py-8">
-          <p className="text-sm text-gray-600">Loading asset types...</p>
-        </div>
-      </div>
+  const displayList = useMemo(() => {
+    if (!searchTerm.trim()) return assetTypes;
+    const q = searchTerm.trim().toLowerCase();
+    return assetTypes.filter(
+      (t) =>
+        (t.name && t.name.toLowerCase().includes(q)) ||
+        (t.description && t.description.toLowerCase().includes(q)) ||
+        (t.account_name && t.account_name.toLowerCase().includes(q))
     );
-  }
+  }, [assetTypes, searchTerm]);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+  };
 
   return (
-    <div className="p-4">
-      <div className="mb-4 flex justify-between items-center">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link
-              to="/dashboard/assets"
-              className="text-gray-600 hover:text-gray-900"
-            >
-              <FontAwesomeIcon icon={faArrowLeft} />
-            </Link>
-            <h1 className="text-lg font-bold text-gray-900">Fixed Assets Configuration</h1>
-          </div>
-          <p className="text-xs text-gray-600 mt-1">Manage asset types and their settings</p>
+    <div
+      className="reports-container"
+      style={{
+        height: '100%',
+        maxHeight: '100%',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}
+    >
+      {/* Report Header */}
+      <div className="report-header" style={{ flexShrink: 0 }}>
+        <div className="report-header-content">
+          <h2 className="report-title">Fixed Assets Configuration</h2>
+          <p className="report-subtitle">Manage asset types and their settings.</p>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-        >
-          <FontAwesomeIcon icon={faPlus} />
-          Add Asset Type
-        </button>
+        <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            type="button"
+            className="btn-checklist"
+            onClick={() => navigate('/dashboard/assets')}
+          >
+            <FontAwesomeIcon icon={faArrowLeft} />
+            Back to Fixed Assets
+          </button>
+          <button
+            onClick={handleAdd}
+            className="btn-checklist"
+          >
+            <FontAwesomeIcon icon={faPlus} />
+            Add Asset Type
+          </button>
+        </div>
       </div>
 
+      {/* Filters Section - same structure as Students */}
+      <div className="report-filters" style={{ flexShrink: 0 }}>
+        <div className="report-filters-left">
+          <form onSubmit={handleSearch} className="filter-group">
+            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <FontAwesomeIcon icon={faSearch} className="search-icon" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by name or description..."
+                className="filter-input search-input"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    padding: '4px 6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '20px',
+                    height: '20px'
+                  }}
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Error Display - same as Students */}
       {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 text-xs rounded">
+        <div style={{ padding: '10px 30px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem' }}>
           {error}
         </div>
       )}
 
-      {success && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 text-xs rounded">
-          {success}
-        </div>
-      )}
-
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <table className="w-full text-xs">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-2 text-left font-semibold text-gray-700">Name</th>
-              <th className="px-4 py-2 text-left font-semibold text-gray-700">Description</th>
-              <th className="px-4 py-2 text-left font-semibold text-gray-700">Chart of Account</th>
-              <th className="px-4 py-2 text-left font-semibold text-gray-700">Requires Registration</th>
-              <th className="px-4 py-2 text-left font-semibold text-gray-700">Requires Serial #</th>
-              <th className="px-4 py-2 text-left font-semibold text-gray-700">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {assetTypes.length === 0 ? (
+      {/* Table Container - same as Students */}
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: 0,
+        height: '100%'
+      }}>
+        {loading && assetTypes.length === 0 ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading asset types...</p>
+          </div>
+        ) : (
+          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+            <thead style={{
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
+              background: 'var(--sidebar-bg)'
+            }}>
               <tr>
-                <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
-                  No asset types found. Click "Add Asset Type" to create one.
-                </td>
+                <th style={{ padding: '6px 10px', verticalAlign: 'middle' }}>NAME</th>
+                <th style={{ padding: '6px 10px', verticalAlign: 'middle' }}>DESCRIPTION</th>
+                <th style={{ padding: '6px 10px', verticalAlign: 'middle' }}>CHART OF ACCOUNT</th>
+                <th style={{ padding: '6px 10px', verticalAlign: 'middle' }}>REQUIRES REGISTRATION</th>
+                <th style={{ padding: '6px 10px', verticalAlign: 'middle' }}>REQUIRES SERIAL #</th>
+                <th style={{ padding: '6px 10px', verticalAlign: 'middle' }}>ACTIONS</th>
               </tr>
-            ) : (
-              assetTypes.map((type) => (
-                <tr key={type.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <FontAwesomeIcon icon={faBox} className="text-gray-400" />
-                      <span className="font-medium text-gray-900">{type.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-gray-600">
-                    {type.description || '-'}
-                  </td>
-                  <td className="px-4 py-2 text-gray-600">
-                    {type.account_code} - {type.account_name}
-                  </td>
-                  <td className="px-4 py-2">
-                    {type.requires_registration ? (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">Yes</span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded text-xs">No</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {type.requires_serial_number ? (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">Yes</span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded text-xs">No</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handleEdit(type)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
-                        title="Edit"
-                      >
-                        <FontAwesomeIcon icon={faEdit} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(type.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded"
-                        title="Delete"
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              {displayList.length === 0 ? (
+                <tr style={{ height: '32px', backgroundColor: '#fafafa' }}>
+                  <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.8125rem', verticalAlign: 'middle' }}>
+                    {assetTypes.length === 0
+                      ? ''
+                      : 'No matching asset types.'}
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                displayList.map((type, index) => (
+                  <tr
+                    key={type.id}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                        <FontAwesomeIcon icon={faBox} style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }} />
+                        <span>{type.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>{type.description || '—'}</td>
+                    <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>{type.account_code} — {type.account_name}</td>
+                    <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.7rem',
+                          fontWeight: 500,
+                          background: type.requires_registration ? '#d1fae5' : '#f3f4f6',
+                          color: type.requires_registration ? '#065f46' : '#374151'
+                        }}
+                      >
+                        {type.requires_registration ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '0.7rem',
+                          fontWeight: 500,
+                          background: type.requires_serial_number ? '#d1fae5' : '#f3f4f6',
+                          color: type.requires_serial_number ? '#065f46' : '#374151'
+                        }}
+                      >
+                        {type.requires_serial_number ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <button
+                          onClick={() => handleEdit(type)}
+                          style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          title="Edit"
+                        >
+                          <FontAwesomeIcon icon={faEdit} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(type.id)}
+                          style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          title="Delete"
+                        >
+                          <FontAwesomeIcon icon={faTrash} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {/* Empty placeholder rows - same as Students (25 rows total) */}
+              {Array.from({ length: Math.max(0, 25 - displayList.length) }).map((_, index) => (
+                <tr
+                  key={`empty-${index}`}
+                  style={{
+                    height: '32px',
+                    backgroundColor: (displayList.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                  }}
+                >
+                  <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px', verticalAlign: 'middle' }}>&nbsp;</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Pagination Footer - same as Students */}
+      <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+        <div className="table-footer-left">
+          Showing {displayList.length === 0 ? 0 : 1} to {displayList.length} of {assetTypes.length} results.
+        </div>
+        <div className="table-footer-right">
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+            All data displayed
+          </div>
+        </div>
       </div>
 
       {/* Add/Edit Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-base font-bold text-gray-900">
+        <div
+          className="modal-overlay"
+          onClick={() => !addLoading && setShowAddModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="asset-type-modal-title"
+        >
+          <div
+            className="modal-dialog"
+            style={{ maxWidth: '600px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2 id="asset-type-modal-title" className="modal-title">
                 {editingType ? 'Edit Asset Type' : 'Add New Asset Type'}
               </h2>
               <button
-                onClick={() => setShowAddModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                type="button"
+                className="modal-close-btn"
+                onClick={() => !addLoading && setShowAddModal(false)}
+                disabled={addLoading}
+                aria-label="Close"
               >
-                <FontAwesomeIcon icon={faTimes} />
+                ✕
               </button>
             </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    className="w-full border border-gray-300 px-3 py-2 text-xs rounded"
-                    placeholder="e.g., Vehicles, Equipment"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Icon
-                  </label>
-                  <input
-                    type="text"
-                    name="icon"
-                    value={formData.icon}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 px-3 py-2 text-xs rounded"
-                    placeholder="faBox"
-                  />
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    rows="2"
-                    className="w-full border border-gray-300 px-3 py-2 text-xs rounded"
-                    placeholder="Brief description of this asset type"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Chart of Account <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="chart_of_account_id"
-                    value={formData.chart_of_account_id}
-                    onChange={handleChange}
-                    required
-                    className="w-full border border-gray-300 px-3 py-2 text-xs rounded"
-                  >
-                    <option value="">Select Account</option>
-                    {getAssetAccounts().map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.code} - {acc.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Depreciation Account
-                  </label>
-                  <select
-                    name="depreciation_account_id"
-                    value={formData.depreciation_account_id}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 px-3 py-2 text-xs rounded"
-                  >
-                    <option value="">Select Account (Optional)</option>
-                    {getExpenseAccounts().map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.code} - {acc.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Expense Account
-                  </label>
-                  <select
-                    name="expense_account_id"
-                    value={formData.expense_account_id}
-                    onChange={handleChange}
-                    className="w-full border border-gray-300 px-3 py-2 text-xs rounded"
-                  >
-                    <option value="">Select Account (Optional)</option>
-                    {getExpenseAccounts().map(acc => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.code} - {acc.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="md:col-span-2 space-y-2">
-                  <label className="flex items-center gap-2">
+            <form className="modal-form" onSubmit={handleSubmit} style={{ border: 'none', padding: '16px', gap: '16px' }}>
+              <div className="modal-body" style={{ padding: 0, maxHeight: 'none', boxShadow: 'none' }}>
+                {error && (
+                  <div className="form-group" style={{ marginBottom: 8 }}>
+                    <div style={{ padding: '10px 12px', background: '#fee2e2', color: '#dc2626', fontSize: '0.8rem', borderRadius: 4 }}>
+                      {error}
+                    </div>
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label className="form-label">
+                      Name <span className="required">*</span>
+                    </label>
                     <input
-                      type="checkbox"
-                      name="requires_registration"
-                      checked={formData.requires_registration}
+                      type="text"
+                      name="name"
+                      className="form-control"
+                      placeholder="e.g., Vehicles, Equipment"
+                      value={formData.name}
                       onChange={handleChange}
-                      className="h-4 w-4"
+                      required
                     />
-                    <span className="text-xs font-medium text-gray-700">Requires Registration Number</span>
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      name="requires_serial_number"
-                      checked={formData.requires_serial_number}
+                  </div>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label className="form-label">Description</label>
+                    <textarea
+                      name="description"
+                      className="form-control"
+                      rows="2"
+                      placeholder="Brief description of this asset type"
+                      value={formData.description}
                       onChange={handleChange}
-                      className="h-4 w-4"
                     />
-                    <span className="text-xs font-medium text-gray-700">Requires Serial Number</span>
-                  </label>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">
+                      Chart of Account <span className="required">*</span>
+                    </label>
+                    <select
+                      name="chart_of_account_id"
+                      className="form-control"
+                      value={formData.chart_of_account_id}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">Select Account</option>
+                      {getAssetAccounts().map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.code} — {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Depreciation Account</label>
+                    <select
+                      name="depreciation_account_id"
+                      className="form-control"
+                      value={formData.depreciation_account_id}
+                      onChange={handleChange}
+                    >
+                      <option value="">Select Account (Optional)</option>
+                      {getExpenseAccounts().map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.code} — {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Expense Account</label>
+                    <select
+                      name="expense_account_id"
+                      className="form-control"
+                      value={formData.expense_account_id}
+                      onChange={handleChange}
+                    >
+                      <option value="">Select Account (Optional)</option>
+                      {getExpenseAccounts().map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.code} — {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          name="requires_registration"
+                          checked={formData.requires_registration}
+                          onChange={handleChange}
+                          style={{ width: '16px', height: '16px' }}
+                        />
+                        <span className="form-label" style={{ margin: 0 }}>Requires Registration Number</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          name="requires_serial_number"
+                          checked={formData.requires_serial_number}
+                          onChange={handleChange}
+                          style={{ width: '16px', height: '16px' }}
+                        />
+                        <span className="form-label" style={{ margin: 0 }}>Requires Serial Number</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t">
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px' }}>
                 <button
                   type="button"
+                  className="modal-btn modal-btn-cancel"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-xs border border-gray-300 rounded hover:bg-gray-50"
+                  disabled={addLoading}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="px-4 py-2 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  className="modal-btn modal-btn-confirm"
+                  disabled={addLoading}
                 >
-                  {loading ? 'Saving...' : editingType ? 'Update' : 'Create'}
+                  {addLoading ? 'Saving...' : editingType ? 'Update' : 'Create'}
                 </button>
               </div>
             </form>
@@ -454,4 +595,3 @@ const AssetTypesConfig = () => {
 };
 
 export default AssetTypesConfig;
-

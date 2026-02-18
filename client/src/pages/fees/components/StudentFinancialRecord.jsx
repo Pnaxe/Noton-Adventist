@@ -27,12 +27,27 @@ const StudentFinancialRecord = () => {
   const [transactions, setTransactions] = useState([]);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit] = useState(25);
+  const [allTransactions, setAllTransactions] = useState([]);
 
   useEffect(() => {
     if (selectedStudent) {
       fetchStudentFinancialData();
     }
   }, [selectedStudent]);
+
+  // Pagination logic
+  useEffect(() => {
+    if (allTransactions.length > 0) {
+      const startIndex = (currentPage - 1) * limit;
+      const endIndex = startIndex + limit;
+      const paginatedTransactions = allTransactions.slice(startIndex, endIndex);
+      setTransactions(paginatedTransactions);
+    } else {
+      setTransactions([]);
+    }
+  }, [currentPage, allTransactions, limit]);
 
   const searchStudents = async () => {
     if (!searchTerm.trim()) return;
@@ -59,6 +74,8 @@ const StudentFinancialRecord = () => {
     setSearchTerm('');
     setFinancialData(null);
     setTransactions([]);
+    setAllTransactions([]);
+    setCurrentPage(1);
   };
 
   const fetchStudentFinancialData = async () => {
@@ -82,70 +99,12 @@ const StudentFinancialRecord = () => {
         }
       );
 
-      console.log('Financial Summary:', summaryResponse.data.data);
-      console.log('Transactions:', transactionsResponse.data.data);
-      
-      // Debug: Log boarding transactions specifically
-      if (transactionsResponse.data.data && Array.isArray(transactionsResponse.data.data)) {
-        const boardingTransactions = transactionsResponse.data.data.filter(t => t.fee_type === 'boarding');
-        console.log('Boarding transactions found:', boardingTransactions.length);
-        boardingTransactions.forEach((transaction, index) => {
-          console.log(`Boarding transaction ${index + 1}:`, {
-            id: transaction.id,
-            amount: transaction.amount,
-            transaction_type: transaction.transaction_type,
-            notes: transaction.notes,
-            fee_type: transaction.fee_type
-          });
-        });
-      }
-      
-      // Detailed logging for transactions
-      if (transactionsResponse.data.data && Array.isArray(transactionsResponse.data.data)) {
-        console.log('=== DETAILED TRANSACTION ANALYSIS ===');
-        console.log('Total transactions received:', transactionsResponse.data.data.length);
-        
-        // Log each transaction with its key fields
-        transactionsResponse.data.data.forEach((transaction, index) => {
-          console.log(`Transaction ${index + 1}:`, {
-            id: transaction.id,
-            transaction_type: transaction.transaction_type,
-            amount: transaction.amount,
-            fee_type: transaction.fee_type,
-            notes: transaction.notes,
-            payment_date: transaction.payment_date,
-            running_balance: transaction.running_balance
-          });
-        });
-        
-        // Check for transaction_type field
-        const hasTransactionType = transactionsResponse.data.data.every(t => t.transaction_type !== undefined);
-        console.log('All transactions have transaction_type field:', hasTransactionType);
-        
-        // Count transaction types
-        const typeCounts = transactionsResponse.data.data.reduce((acc, t) => {
-          acc[t.transaction_type] = (acc[t.transaction_type] || 0) + 1;
-          return acc;
-        }, {});
-        console.log('Transaction type counts:', typeCounts);
-        
-        // Check for DEBIT and CREDIT transactions
-        const debitTransactions = transactionsResponse.data.data.filter(t => t.transaction_type === 'DEBIT');
-        const creditTransactions = transactionsResponse.data.data.filter(t => t.transaction_type === 'CREDIT');
-        console.log('DEBIT transactions count:', debitTransactions.length);
-        console.log('CREDIT transactions count:', creditTransactions.length);
-        console.log('=== END ANALYSIS ===');
-      } else {
-        console.log('No transactions data or not an array:', transactionsResponse.data.data);
-      }
-
       setFinancialData(summaryResponse.data.data || {});
-      setTransactions(transactionsResponse.data.data || []);
+      const allTrans = transactionsResponse.data.data || [];
+      setAllTransactions(allTrans);
+      setCurrentPage(1);
     } catch (error) {
       console.error('Error fetching financial data:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      console.error('Error URL:', error.config?.url);
       setErrorMessage(`Failed to fetch financial data: ${error.response?.data?.message || error.message}`);
       setShowErrorModal(true);
     } finally {
@@ -160,30 +119,25 @@ const StudentFinancialRecord = () => {
     }).format(amount);
   };
 
-  const getTransactionTypeIcon = (type) => {
-    switch (type) {
-      case 'tuition':
-        return faFileInvoice;
-      case 'boarding':
-        return faUserGraduate;
-      case 'other':
-        return faReceipt;
-      default:
-        return faDollarSign;
-    }
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
   };
 
-  const getTransactionTypeColor = (type) => {
-    switch (type) {
-      case 'tuition':
-        return 'text-blue-600';
-      case 'boarding':
-        return 'text-green-600';
-      case 'other':
-        return 'text-purple-600';
-      default:
-        return 'text-gray-600';
-    }
+  // Calculate pagination values
+  const totalTransactions = allTransactions.length;
+  const totalPages = Math.ceil(totalTransactions / limit);
+  const displayStart = totalTransactions > 0 ? (currentPage - 1) * limit + 1 : 0;
+  const displayEnd = Math.min(currentPage * limit, totalTransactions);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    searchStudents();
+  };
+
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setStudents([]);
   };
 
   return (
@@ -199,231 +153,344 @@ const StudentFinancialRecord = () => {
           }
         `}
       </style>
-      <div className="bg-white border border-gray-200 p-4 print:p-0">
-        {/* Print Header */}
-        <div className="hidden print:block mb-6 border-b border-gray-300 pb-4">
-          <div className="text-center">
-            <h1 className="text-lg font-bold text-gray-900">Student Financial Statement</h1>
-            <p className="text-xs text-gray-600 mt-1">Generated on {new Date().toLocaleDateString()}</p>
-          </div>
-          {selectedStudent && (
-            <div className="mt-4 grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <span className="font-medium">Student:</span> {selectedStudent.Name} {selectedStudent.Surname}
-              </div>
-              <div>
-                <span className="font-medium">Registration No:</span> {selectedStudent.RegNumber}
-              </div>
-              <div>
-                <span className="font-medium">Class:</span> {selectedStudent.ClassName || 'Not Assigned'}
-              </div>
-              <div>
-                <span className="font-medium">Academic Year:</span> 2025
-              </div>
-            </div>
-          )}
-        </div>
-
-        <h2 className="text-sm font-medium text-gray-900 mb-4 print:text-base print:hidden">Student Financial Record</h2>
-
-        {/* Student Search */}
-        <div className="mb-6 print:hidden">
-          <h3 className="text-xs font-medium text-gray-900 mb-2">Search Student</h3>
-          <div className="flex space-x-2">
-            <div className="flex-1 relative">
-              <FontAwesomeIcon icon={faSearch} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs" />
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      {/* Filters Section */}
+      <div className="report-filters" style={{ flexShrink: 0 }}>
+        <div className="report-filters-left">
+          {/* Search Bar */}
+          <form onSubmit={handleSearch} className="filter-group">
+            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <FontAwesomeIcon icon={faSearch} className="search-icon" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Enter student name or registration number..."
-                className="w-full pl-6 pr-2 py-1.5 border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500"
+                placeholder="Search by name or registration number..."
+                className="filter-input search-input"
               />
-            </div>
-            <button
-              type="button"
-              onClick={searchStudents}
-              disabled={loading}
-              className="bg-gray-600 text-white px-3 py-1.5 text-xs hover:bg-gray-700 disabled:opacity-50"
-            >
-              {loading ? 'Searching...' : 'Search'}
-            </button>
-          </div>
-
-          {students.length > 0 && (
-            <div className="mt-2 border border-gray-200 max-h-32 overflow-y-auto">
-              {students.map((student) => (
-                <div
-                  key={student.RegNumber}
-                  onClick={() => selectStudent(student)}
-                  className="p-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+              {searchTerm && (
+                <button
+                  onClick={handleClearSearch}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    padding: '4px 6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '20px',
+                    height: '20px'
+                  }}
+                  title="Clear search"
                 >
-                  <div className="font-medium text-gray-900 text-xs">
-                    {student.Name} {student.Surname}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Reg: {student.RegNumber} | Class: {student.ClassName || 'Not Assigned'}
-                  </div>
-                </div>
-              ))}
+                  ×
+                </button>
+              )}
             </div>
-          )}
-
-          {selectedStudent && (
-            <div className="mt-3 bg-gray-50 p-3 border border-gray-200">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <span className="text-gray-600">Name:</span>
-                  <span className="ml-1 font-medium">{selectedStudent.Name} {selectedStudent.Surname}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Registration No:</span>
-                  <span className="ml-1 font-medium">{selectedStudent.RegNumber}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Class:</span>
-                  <span className="ml-1 font-medium">{selectedStudent.ClassName || 'Not Assigned'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Academic Year:</span>
-                  <span className="ml-1 font-medium">2025</span>
-                </div>
-              </div>
-            </div>
-          )}
+          </form>
         </div>
+      </div>
 
-        {/* Balance Display */}
-        {financialData && (
-          <div className="mb-6">
-            <div className="bg-gray-50 p-4 border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-gray-600 font-medium">Current Balance</div>
-                  <div className={`text-lg font-bold ${(financialData.balance || 0) >= 0 ? 'text-green-900' : 'text-red-900'}`}>
-                    {formatCurrency(financialData.balance || 0)}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-600">
-                    {financialData.balance >= 0 ? 'CR' : 'DR'}
-                  </div>
-                  <div className="text-xs font-medium text-gray-900">
-                    {financialData.balance >= 0 ? 'Credit Balance' : 'Debit Balance'}
-                  </div>
-                </div>
+      {/* Student Search Results Dropdown */}
+      {students.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: '30px',
+          right: '30px',
+          zIndex: 1000,
+          backgroundColor: 'white',
+          border: '1px solid var(--border-color)',
+          borderRadius: '4px',
+          maxHeight: '200px',
+          overflowY: 'auto',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          marginTop: '4px'
+        }}>
+          {students.map((student) => (
+            <div
+              key={student.RegNumber}
+              onClick={() => selectStudent(student)}
+              style={{
+                padding: '12px 16px',
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--border-color)',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+            >
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                {student.Name} {student.Surname}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                Reg: {student.RegNumber} | Class: {student.ClassName || 'Not Assigned'}
               </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      )}
 
-        {/* Transactions Table */}
-        {selectedStudent && (
-          <div>
-            <h3 className="text-xs font-medium text-gray-900 mb-3">
-              Financial Statement ({transactions.length} records)
-            </h3>
-            
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="text-gray-500">Loading transactions...</div>
-              </div>
-            ) : transactions.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                  <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: 'var(--sidebar-bg)' }}>
-                    <tr>
-                      <th style={{ padding: '6px 10px' }}>DATE</th>
-                      <th style={{ padding: '6px 10px' }}>TYPE</th>
-                      <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
-                      <th style={{ padding: '6px 10px', textAlign: 'right' }}>DR</th>
-                      <th style={{ padding: '6px 10px', textAlign: 'right' }}>CR</th>
-                      <th style={{ padding: '6px 10px', textAlign: 'right' }}>BALANCE</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((transaction, index) => (
-                      <tr
-                        key={transaction.id || index}
-                        style={{ height: '32px', backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' }}
-                      >
-                        <td style={{ padding: '4px 10px' }}>
-                          {new Date(transaction.payment_date).toLocaleDateString()}
-                        </td>
-                        <td style={{ padding: '4px 10px' }}>
-                          <div className="flex items-center">
-                            <FontAwesomeIcon 
-                              icon={getTransactionTypeIcon(transaction.fee_type)} 
-                              className={`text-xs mr-1 ${getTransactionTypeColor(transaction.fee_type)}`} 
-                            />
-                            <span className={`text-xs font-medium capitalize ${getTransactionTypeColor(transaction.fee_type)}`}>
-                              {transaction.fee_type}
-                            </span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '4px 10px' }}>
-                          {transaction.notes || `${transaction.fee_type} payment`}
-                        </td>
-                        <td style={{ padding: '4px 10px', textAlign: 'right' }}>
-                          {(() => {
-                            console.log('Rendering DR column for transaction:', {
-                              id: transaction.id,
-                              transaction_type: transaction.transaction_type,
-                              amount: transaction.amount,
-                              isDebit: transaction.transaction_type === 'DEBIT'
-                            });
-                            return transaction.transaction_type === 'DEBIT' ? (
-                              <span className="text-red-600 font-medium">
-                                {formatCurrency(Math.abs(transaction.amount), transaction.currency_symbol)}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            );
-                          })()}
-                        </td>
-                        <td style={{ padding: '4px 10px', textAlign: 'right' }}>
-                          {(() => {
-                            console.log('Rendering CR column for transaction:', {
-                              id: transaction.id,
-                              transaction_type: transaction.transaction_type,
-                              amount: transaction.amount,
-                              isCredit: transaction.transaction_type === 'CREDIT'
-                            });
-                            return transaction.transaction_type === 'CREDIT' ? (
-                              <span className="text-green-600 font-medium">
-                                {formatCurrency(Math.abs(transaction.amount), transaction.currency_symbol)}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">-</span>
-                            );
-                          })()}
-                        </td>
-                        <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600 }}>
-                          <span className={transaction.running_balance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {formatCurrency(transaction.running_balance || 0, transaction.currency_symbol)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <FontAwesomeIcon icon={faInfoCircle} className="text-gray-400 text-2xl mb-2" />
-                <div className="text-gray-500 text-sm">No transactions found</div>
+      {/* Selected Student Info */}
+      {selectedStudent && (
+        <div style={{
+          padding: '12px 30px',
+          background: '#f9fafb',
+          borderBottom: '1px solid var(--border-color)',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', fontSize: '0.75rem' }}>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>Name:</span>
+              <span style={{ marginLeft: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {selectedStudent.Name} {selectedStudent.Surname}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>Registration No:</span>
+              <span style={{ marginLeft: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {selectedStudent.RegNumber}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>Class:</span>
+              <span style={{ marginLeft: '8px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                {selectedStudent.ClassName || 'Not Assigned'}
+              </span>
+            </div>
+            {financialData && (
+              <div>
+                <span style={{ color: 'var(--text-secondary)' }}>Balance:</span>
+                <span style={{
+                  marginLeft: '8px',
+                  fontWeight: 600,
+                  color: (financialData.balance || 0) >= 0 ? '#16a34a' : '#dc2626'
+                }}>
+                  {formatCurrency(financialData.balance || 0)}
+                  {' '}
+                  {(financialData.balance || 0) >= 0 ? 'CR' : 'DR'}
+                </span>
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Error Modal */}
-        <ErrorModal
-          isOpen={showErrorModal}
-          onClose={() => setShowErrorModal(false)}
-          message={errorMessage}
-        />
+      {/* Table Container */}
+      <div className="report-content-container ecl-table-container" style={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        overflow: 'auto',
+        minHeight: 0,
+        padding: 0,
+        height: '100%'
+      }}>
+        <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+          <thead style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            background: 'var(--sidebar-bg)'
+          }}>
+            <tr>
+              <th style={{ padding: '6px 10px' }}>DATE</th>
+              <th style={{ padding: '6px 10px' }}>TYPE</th>
+              <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+              <th style={{ padding: '6px 10px', textAlign: 'right' }}>DR</th>
+              <th style={{ padding: '6px 10px', textAlign: 'right' }}>CR</th>
+              <th style={{ padding: '6px 10px', textAlign: 'right' }}>BALANCE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && !selectedStudent ? (
+              <>
+                {Array.from({ length: 25 }).map((_, index) => (
+                  <tr
+                    key={`loading-${index}`}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  </tr>
+                ))}
+              </>
+            ) : !selectedStudent ? (
+              <>
+                {Array.from({ length: 25 }).map((_, index) => (
+                  <tr
+                    key={`empty-${index}`}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  </tr>
+                ))}
+              </>
+            ) : loading && transactions.length === 0 ? (
+              <>
+                {Array.from({ length: 25 }).map((_, index) => (
+                  <tr
+                    key={`loading-trans-${index}`}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  </tr>
+                ))}
+              </>
+            ) : transactions.length > 0 ? (
+              <>
+                {transactions.map((transaction, index) => (
+                  <tr
+                    key={transaction.id || index}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>
+                      {formatDate(transaction.payment_date)}
+                    </td>
+                    <td style={{ padding: '4px 10px' }}>
+                      {transaction.fee_type || 'N/A'}
+                    </td>
+                    <td style={{ padding: '4px 10px' }}>
+                      {transaction.notes || `${transaction.fee_type || 'Payment'}`}
+                    </td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600, color: '#dc2626' }}>
+                      {transaction.transaction_type === 'DEBIT' ? formatCurrency(Math.abs(transaction.amount), transaction.currency_symbol) : '—'}
+                    </td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600, color: '#16a34a' }}>
+                      {transaction.transaction_type === 'CREDIT' ? formatCurrency(Math.abs(transaction.amount), transaction.currency_symbol) : '—'}
+                    </td>
+                    <td style={{ padding: '4px 10px', textAlign: 'right', fontWeight: 600 }}>
+                      <span style={{ color: (transaction.running_balance || 0) >= 0 ? '#16a34a' : '#dc2626' }}>
+                        {formatCurrency(transaction.running_balance || 0, transaction.currency_symbol)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {/* Empty placeholder rows to always show 25 rows */}
+                {Array.from({ length: Math.max(0, 25 - transactions.length) }).map((_, index) => (
+                  <tr
+                    key={`empty-${index}`}
+                    style={{
+                      height: '32px',
+                      backgroundColor: (transactions.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  </tr>
+                ))}
+              </>
+            ) : (
+              <>
+                {Array.from({ length: 25 }).map((_, index) => (
+                  <tr
+                    key={`no-data-${index}`}
+                    style={{
+                      height: '32px',
+                      backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
+                    }}
+                  >
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                    <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  </tr>
+                ))}
+              </>
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* Pagination Footer */}
+      <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+        <div className="table-footer-left">
+          {selectedStudent && allTransactions.length > 0 ? (
+            `Showing ${displayStart} to ${displayEnd} of ${totalTransactions} results.`
+          ) : (
+            'Showing 0 to 0 of 0 results.'
+          )}
+        </div>
+        <div className="table-footer-right">
+          {selectedStudent && allTransactions.length > 0 ? (
+            totalPages > 1 ? (
+              <div className="pagination-controls">
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  className="pagination-btn"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                All data displayed
+              </div>
+            )
+          ) : (
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+              All data displayed
+            </div>
+          )}
+        </div>
+      </div>
+      </div>
+
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        message={errorMessage}
+      />
     </>
   );
 };

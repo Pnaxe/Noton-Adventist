@@ -17,17 +17,7 @@ const StudentFinancialRecord = () => {
           <p className="report-subtitle">View and manage student financial statements.</p>
         </div>
       </div>
-      <div className="report-content-container ecl-table-container" style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        overflow: 'auto',
-        minHeight: 0,
-        padding: '0 20px 20px',
-        height: '100%'
-      }}>
-        <StudentFinancialRecordComponent />
-      </div>
+      <StudentFinancialRecordComponent />
     </div>
   );
 };
