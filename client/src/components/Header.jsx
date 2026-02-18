@@ -107,13 +107,22 @@ const Header = ({ onMenuClick }) => {
   const isInventoryPage = location.pathname.startsWith('/dashboard/inventory');
 
   // Check if we're on a billing page
-  const isBillingPage = location.pathname.startsWith('/dashboard/billing');
+  const isBillingPage = location.pathname.startsWith('/dashboard/billing') ||
+    location.pathname.startsWith('/dashboard/waivers') ||
+    location.pathname.startsWith('/dashboard/students/balances') ||
+    location.pathname.startsWith('/dashboard/students/manual-balance-update') ||
+    location.pathname.startsWith('/dashboard/financial-records') ||
+    location.pathname.startsWith('/dashboard/invoice-structures') ||
+    location.pathname.startsWith('/dashboard/fees-payment') ||
+    location.pathname.startsWith('/dashboard/all-payments') ||
+    location.pathname.startsWith('/dashboard/fees/unified-payment');
 
   // Check if we're on a settings page
   const isSettingsPage = location.pathname.startsWith('/dashboard/settings');
 
   // Check if we're on a boarding page
-  const isBoardingPage = location.pathname.startsWith('/dashboard/boarding');
+  const isBoardingPage = location.pathname.startsWith('/dashboard/boarding') ||
+    location.pathname.startsWith('/dashboard/enrollments');
 
   // Check if we're on a classes page
   const isClassesPage = location.pathname.startsWith('/dashboard/classes');
@@ -144,8 +153,23 @@ const Header = ({ onMenuClick }) => {
   // Set active billing tab based on current route
   useEffect(() => {
     if (isBillingPage && onBillingTabChange) {
-      // Keep the current tab from context
-      // Can be extended to set based on route if needed
+      const path = location.pathname;
+      if (path.startsWith('/dashboard/waivers')) {
+        onBillingTabChange('waivers');
+      } else if (path.startsWith('/dashboard/students/balances')) {
+        onBillingTabChange('outstanding-balance');
+      } else if (path.startsWith('/dashboard/students/manual-balance-update')) {
+        onBillingTabChange('opening-balance');
+      } else if (path.startsWith('/dashboard/financial-records')) {
+        onBillingTabChange('financial-record');
+      } else if (path.startsWith('/dashboard/invoice-structures')) {
+        onBillingTabChange('invoice-structures');
+      } else if (path.startsWith('/dashboard/billing') || 
+                 path.startsWith('/dashboard/fees-payment') ||
+                 path.startsWith('/dashboard/all-payments') ||
+                 path.startsWith('/dashboard/fees/unified-payment')) {
+        onBillingTabChange('record-payment');
+      }
     }
   }, [location.pathname, isBillingPage, onBillingTabChange]);
 
@@ -920,6 +944,17 @@ const Header = ({ onMenuClick }) => {
             { id: 'financial-record', label: 'Student Financial', icon: faFileInvoiceDollar },
             { id: 'invoice-structures', label: 'Invoice Structures', icon: faFileContract }
           ];
+          const getBillingTabPath = (tabId) => {
+            switch (tabId) {
+              case 'record-payment': return '/dashboard/billing';
+              case 'outstanding-balance': return '/dashboard/students/balances';
+              case 'opening-balance': return '/dashboard/students/manual-balance-update';
+              case 'waivers': return '/dashboard/waivers';
+              case 'financial-record': return '/dashboard/financial-records';
+              case 'invoice-structures': return '/dashboard/invoice-structures';
+              default: return '/dashboard/billing';
+            }
+          };
           const visibleTabs = billingTabs.slice(0, billingVisibleCount);
           const overflowTabs = billingTabs.slice(billingVisibleCount);
           const showMore = overflowTabs.length > 0 && !isSmallScreen;
@@ -940,6 +975,7 @@ const Header = ({ onMenuClick }) => {
                     if (onBillingTabChange) {
                       onBillingTabChange(tab.id);
                     }
+                    navigate(getBillingTabPath(tab.id));
                   }}
                   className={`top-nav-menu-item ${displayActiveBillingTab === tab.id ? 'active' : ''}`}
                   style={{
@@ -1024,6 +1060,7 @@ const Header = ({ onMenuClick }) => {
                             if (onBillingTabChange) {
                               onBillingTabChange(tab.id);
                             }
+                            navigate(getBillingTabPath(tab.id));
                             setBillingMoreOpen(false);
                           }}
                         >
@@ -1149,9 +1186,19 @@ const Header = ({ onMenuClick }) => {
                   className="top-nav-dropdown"
                   value={displayActiveBillingTab}
                   onChange={(e) => {
+                    const tabId = e.target.value;
                     if (onBillingTabChange) {
-                      onBillingTabChange(e.target.value);
+                      onBillingTabChange(tabId);
                     }
+                    const paths = {
+                      'record-payment': '/dashboard/billing',
+                      'outstanding-balance': '/dashboard/students/balances',
+                      'opening-balance': '/dashboard/students/manual-balance-update',
+                      'waivers': '/dashboard/waivers',
+                      'financial-record': '/dashboard/financial-records',
+                      'invoice-structures': '/dashboard/invoice-structures'
+                    };
+                    navigate(paths[tabId] || '/dashboard/billing');
                   }}
                 >
                   <option value="record-payment">Record Payment</option>

@@ -1,5 +1,10 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useBilling } from '../contexts/BillingContext';
+import { useAccounting } from '../contexts/AccountingContext';
+import { useBoarding } from '../contexts/BoardingContext';
+import { useSettings } from '../contexts/SettingsContext';
+import { useSports } from '../contexts/SportsContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faTachometerAlt,
@@ -27,6 +32,14 @@ import logo from '../assets/logo(2).png';
 
 const Sidebar = ({ open, setOpen }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Get context hooks for setting active tabs
+  const billingContext = useBilling();
+  const accountingContext = useAccounting();
+  const boardingContext = useBoarding();
+  const settingsContext = useSettings();
+  const sportsContext = useSports();
 
   // Main navigation sections for dashboard - arranged by workflow
   const mainSections = [
@@ -62,6 +75,53 @@ const Sidebar = ({ open, setOpen }) => {
   // Always show main sections - static menu
   const navigationItems = mainSections;
 
+  // Helper function to handle navigation with tab setting
+  const handleNavClick = (item, e) => {
+    setOpen(false);
+
+    // Map sidebar items that have top navigation menus to their first tab
+    const navMap = {
+      'Student Billing': {
+        path: '/dashboard/billing',
+        tabId: 'record-payment',
+        setTab: billingContext?.setActiveTab
+      },
+      'Accounting': {
+        path: '/dashboard/accounting/chart-of-accounts',
+        tabId: 'chart-of-accounts',
+        setTab: accountingContext?.setActiveTab
+      },
+      'Classes': {
+        path: '/dashboard/classes',
+        tabId: 'classes',
+        setTab: null // Classes doesn't use context for tab management
+      },
+      'Sports': {
+        path: '/dashboard/sports',
+        tabId: 'fixtures',
+        setTab: sportsContext?.setActiveTab
+      },
+      'Boarding': {
+        path: '/dashboard/boarding',
+        tabId: 'allocation',
+        setTab: boardingContext?.setActiveTab
+      }
+    };
+
+    const navConfig = navMap[item.name];
+    
+    if (navConfig) {
+      // Prevent default navigation and manually navigate to first tab
+      e.preventDefault();
+      navigate(navConfig.path);
+      // Set the active tab if a setTab function is available
+      if (navConfig.setTab) {
+        navConfig.setTab(navConfig.tabId);
+      }
+    }
+    // For items without top nav menus, let NavLink handle navigation normally
+  };
+
   const renderNavItem = (item) => {
     // Determine if this item should be active - only one at a time
     const currentPath = location.pathname.trim();
@@ -88,7 +148,7 @@ const Sidebar = ({ open, setOpen }) => {
           // Completely override NavLink's isActive - use our custom logic only
           return `nav-item ${shouldBeActive ? 'active' : ''}`;
         }}
-        onClick={() => setOpen(false)}
+        onClick={(e) => handleNavClick(item, e)}
       >
         <FontAwesomeIcon icon={item.icon} className="nav-icon" />
         <span className="nav-text">{item.name}</span>

@@ -1,15 +1,15 @@
 import React, { useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPlus, faTag } from '@fortawesome/free-solid-svg-icons';
 
 // Import waiver components
 import WaiverManagement from './WaiverManagement';
 import ProcessWaiver from './ProcessWaiver';
-import WaiverCategories from './WaiverCategories';
 
 const Waivers = () => {
+  const navigate = useNavigate();
   const processWaiverRef = useRef(null);
-  const waiverCategoriesRef = useRef(null);
   const waiverManagementRef = useRef(null);
 
   const handleWaiverProcessed = () => {
@@ -36,11 +36,7 @@ const Waivers = () => {
         </div>
         <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <button
-            onClick={() => {
-              if (waiverCategoriesRef.current) {
-                waiverCategoriesRef.current.openModal();
-              }
-            }}
+            onClick={() => navigate('/dashboard/waivers/categories')}
             className="btn-checklist"
             style={{ backgroundColor: '#475569' }}
           >
@@ -66,9 +62,6 @@ const Waivers = () => {
       
       {/* Process Waiver Modal */}
       <ProcessWaiver ref={processWaiverRef} onWaiverProcessed={handleWaiverProcessed} />
-      
-      {/* Waiver Categories Modal */}
-      <WaiverCategories ref={waiverCategoriesRef} />
     </div>
   );
 };

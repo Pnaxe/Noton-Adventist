@@ -88,6 +88,7 @@ import EditAnnouncement from './pages/EditAnnouncement';
 import AdditionalFees from './pages/billing/AdditionalFees';
 import StudentBilling from './pages/billing/StudentBilling';
 import Waivers from './pages/waivers/Waivers';
+import WaiverCategories from './pages/waivers/WaiverCategories';
 import Timetables from './pages/timetables/Timetables';
 import TemplateView from './pages/timetables/TemplateView';
 import TemplateEdit from './pages/timetables/TemplateEdit';
@@ -189,6 +190,7 @@ function AppRoutes() {
         <Route path="fees/unified-payment" element={<UnifiedFeePayment />} />
         <Route path="financial-records" element={<StudentFinancialRecord />} />
         <Route path="waivers" element={<Waivers />} />
+        <Route path="waivers/categories" element={<WaiverCategories />} />
 
         {/* Fixed Assets Routes */}
         <Route path="assets" element={<FixedAssets />} />
