@@ -57,6 +57,50 @@ const Login = () => {
 
     return (
         <div className="login-page">
+            {/* Full-page loading overlay */}
+            {loading && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    backdropFilter: 'blur(2px)'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff',
+                        padding: '32px 48px',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '16px',
+                        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+                    }}>
+                        <div className="loading-spinner" style={{
+                            width: '48px',
+                            height: '48px',
+                            border: '4px solid #e5e7eb',
+                            borderTopColor: '#2563eb',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                            marginBottom: 0
+                        }}></div>
+                        <p style={{
+                            margin: 0,
+                            fontSize: '16px',
+                            fontWeight: 500,
+                            color: '#1e293b',
+                            fontFamily: 'Nunito, sans-serif'
+                        }}>Logging in...</p>
+                    </div>
+                </div>
+            )}
             <div className="login-main">
                 {/* Left: Blue panel - portal intro & support */}
                 <div className="login-promo">
@@ -138,8 +182,18 @@ const Login = () => {
                                 type="submit"
                                 className="login-submit-btn"
                                 disabled={loading}
-                                style={{ opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
+                                style={{ opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                             >
+                                {loading && (
+                                    <div className="login-spinner" style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        border: '2px solid rgba(255, 255, 255, 0.3)',
+                                        borderTopColor: '#ffffff',
+                                        borderRadius: '50%',
+                                        animation: 'spin 0.8s linear infinite'
+                                    }}></div>
+                                )}
                                 {loading ? 'Logging in...' : 'Log In'}
                             </button>
                             <div className="register-link-container">

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { useNavigate } from 'react-router-dom';
-import {
-  faUsers,
+import { 
+  faUsers, 
   faPlus,
   faSearch,
   faEye,
@@ -46,12 +46,12 @@ const Classes = () => {
     capacity: '',
     homeroom_teacher_employee_number: ''
   });
-
+  
   // Toast states
   const [toast, setToast] = useState({ message: null, type: 'success', visible: false });
-
+  
   // View modal states removed (navigate to page instead)
-
+  
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
   const [editModalLoading, setEditModalLoading] = useState(false);
@@ -64,7 +64,7 @@ const Classes = () => {
   });
   const [editFormError, setEditFormError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
-
+  
   // Delete modal states
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [classToDelete, setClassToDelete] = useState(null);
@@ -157,13 +157,13 @@ const Classes = () => {
     try {
       setLoading(true);
       setError(null);
-
+      
       // Check if we're searching
       if (activeSearchTerm && activeSearchTerm.trim() !== '') {
         console.log('🔍 Searching for:', activeSearchTerm);
         // Search mode - no pagination
         const response = await axios.get(`${BASE_URL}/classes/gradelevel-classes/search`, {
-          params: {
+          params: { 
             search: activeSearchTerm.trim()
           },
           headers: {
@@ -190,13 +190,13 @@ const Classes = () => {
         const data = response.data;
         console.log('📊 Raw response:', data);
         const allClasses = data.data || [];
-
+        
         // Client-side pagination
         const startIndex = (currentPage - 1) * limit;
         const endIndex = startIndex + limit;
         const paginatedClasses = allClasses.slice(startIndex, endIndex);
         const totalPages = Math.ceil(allClasses.length / limit);
-
+        
         setGradelevelClasses(paginatedClasses);
         setTotalPages(totalPages);
         setTotalClasses(allClasses.length);
@@ -269,14 +269,14 @@ const Classes = () => {
       });
 
       await fetchGradelevelClasses();
-
+      
       const className = formData.name;
       showToast(`Class ${className} has been successfully added!`, 'success');
       handleCloseModal();
     } catch (err) {
       console.error('Error adding class:', err);
       let errorMessage = 'An unexpected error occurred';
-
+      
       if (err.response) {
         const errorData = err.response.data;
         if (errorData?.error) {
@@ -289,7 +289,7 @@ const Classes = () => {
       } else {
         errorMessage = err.message || 'An unexpected error occurred';
       }
-
+      
       setFormError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -323,7 +323,7 @@ const Classes = () => {
       });
 
       const classData = response.data.data;
-
+      
       setEditFormData({
         id: classData.id || '',
         name: classData.name || '',
@@ -377,7 +377,7 @@ const Classes = () => {
     } catch (err) {
       console.error('Error updating class:', err);
       let errorMessage = 'An unexpected error occurred';
-
+      
       if (err.response) {
         const errorData = err.response.data;
         if (errorData?.error) {
@@ -390,7 +390,7 @@ const Classes = () => {
       } else {
         errorMessage = err.message || 'An unexpected error occurred';
       }
-
+      
       setEditFormError(errorMessage);
     } finally {
       setIsSaving(false);
@@ -434,13 +434,13 @@ const Classes = () => {
     } catch (err) {
       console.error('Error deleting class:', err);
       let errorMessage = 'Failed to delete class';
-
+      
       if (err.response) {
         errorMessage = err.response.data?.message || `Server Error (${err.response.status})`;
       } else if (err.request) {
         errorMessage = 'No response from server. Please check your internet connection.';
       }
-
+      
       showToast(errorMessage, 'error');
     } finally {
       setIsDeleting(false);
@@ -450,7 +450,7 @@ const Classes = () => {
   // Toast functions
   const showToast = (message, type = 'success', duration = 3000) => {
     setToast({ message, type, visible: true });
-
+    
     if (duration > 0) {
       setTimeout(() => {
         setToast(prev => ({ ...prev, visible: false }));
@@ -734,13 +734,13 @@ const Classes = () => {
   const hasData = gradelevelClasses.length > 0;
 
   return (
-    <div className="reports-container" style={{
-      height: '100%',
-      maxHeight: '100%',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'relative'
+    <div className="reports-container" style={{ 
+      height: '100%', 
+      maxHeight: '100%', 
+      overflow: 'hidden', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      position: 'relative' 
     }}>
       {/* Report Header */}
       <div className="report-header" style={{ flexShrink: 0 }}>
@@ -749,13 +749,13 @@ const Classes = () => {
           <p className="report-subtitle">Manage grade-level classes and student enrollments.</p>
         </div>
         <div className="report-header-right" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button
+          <button
               onClick={() => setShowAddGradelevelClassModal(true)}
-              className="btn-checklist"
-            >
-              <FontAwesomeIcon icon={faPlus} />
+            className="btn-checklist"
+          >
+            <FontAwesomeIcon icon={faPlus} />
               Add Grade Level Class
-            </button>
+          </button>
         </div>
       </div>
 
@@ -763,45 +763,45 @@ const Classes = () => {
       <div className="report-filters" style={{ flexShrink: 0 }}>
         <div className="report-filters-left">
           <form onSubmit={handleSearch} className="filter-group">
-              <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <FontAwesomeIcon icon={faSearch} className="search-icon" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by class name or stream name..."
-                  className="filter-input search-input"
-                />
-                {searchTerm && (
-                  <button
-                    onClick={() => {
-                      setSearchTerm('');
-                      setActiveSearchTerm('');
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      position: 'absolute',
-                      right: '8px',
-                      padding: '4px 6px',
-                      background: 'transparent',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '1rem',
-                      color: 'var(--text-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '20px',
-                      height: '20px'
-                    }}
-                    title="Clear search"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </form>
+            <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <FontAwesomeIcon icon={faSearch} className="search-icon" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by class name or stream name..."
+                className="filter-input search-input"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setActiveSearchTerm('');
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    padding: '4px 6px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '20px',
+                    height: '20px'
+                  }}
+                  title="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </form>
         </div>
       </div>
 
@@ -814,160 +814,160 @@ const Classes = () => {
 
       {/* Table Container - match Students page */}
       <div className="report-content-container ecl-table-container" style={{
-            display: 'flex',
-            flexDirection: 'column',
-            flex: 1,
-            overflow: 'auto',
-            minHeight: 0,
-            padding: 0,
-            height: '100%'
-          }}>
-            {loading && gradelevelClasses.length === 0 ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: '200px',
-                  gap: '16px'
-                }}
-              >
-                <div className="loading-spinner"></div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading classes...</p>
-              </div>
-            ) : (
-              <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                <thead style={{
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 10,
-                  background: 'var(--sidebar-bg)'
-                }}>
-                  <tr>
-                    <th style={{ padding: '6px 10px' }}>CLASS NAME</th>
-                    <th style={{ padding: '6px 10px' }}>STREAM</th>
-                    <th style={{ padding: '6px 10px' }}>STAGE</th>
-                    <th style={{ padding: '6px 10px' }}>TEACHER</th>
-                    <th style={{ padding: '6px 10px' }}>CAPACITY</th>
-                    <th style={{ padding: '6px 10px' }}>ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {gradelevelClasses.map((classItem, index) => (
-                    <tr
-                      key={classItem.id}
-                      style={{
-                        height: '32px',
-                        backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6'
-                      }}
-                    >
-                      <td style={{ padding: '4px 10px' }}>
-                        {classItem.name}
-                      </td>
-                      <td style={{ padding: '4px 10px' }}>
-                        {classItem.stream_name || 'N/A'}
-                      </td>
-                      <td style={{ padding: '4px 10px' }}>
-                        {classItem.stream_stage || 'N/A'}
-                      </td>
-                      <td style={{ padding: '4px 10px' }}>
-                        {classItem.teacher_name || 'Not Assigned'}
-                      </td>
-                      <td style={{ padding: '4px 10px' }}>
-                        {classItem.capacity || 'Unlimited'}
-                      </td>
-                      <td style={{ padding: '4px 10px' }}>
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                          <button
-                            onClick={() => handleViewClass(classItem.id)}
-                            style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                            title="View"
-                          >
-                            <FontAwesomeIcon icon={faEye} />
-                          </button>
-                          <button
-                            onClick={() => handleEditClass(classItem.id)}
-                            style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                            title="Edit"
-                          >
-                            <FontAwesomeIcon icon={faEdit} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteClick(classItem)}
-                            style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                            title="Delete"
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {/* Empty placeholder rows to always show 25 rows */}
-                  {Array.from({ length: Math.max(0, 25 - gradelevelClasses.length) }).map((_, index) => (
-                    <tr
-                      key={`empty-${index}`}
-                      style={{
-                        height: '32px',
-                        backgroundColor: (gradelevelClasses.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6'
-                      }}
-                    >
-                      <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                      <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                      <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                      <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                      <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                      <td style={{ padding: '4px 10px' }}>&nbsp;</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+        display: 'flex', 
+        flexDirection: 'column', 
+        flex: 1, 
+        overflow: 'auto', 
+        minHeight: 0,
+        padding: 0,
+        height: '100%'
+      }}>
+        {loading && gradelevelClasses.length === 0 ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '200px',
+              gap: '16px'
+            }}
+          >
+            <div className="loading-spinner"></div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading classes...</p>
+          </div>
+        ) : (
+          <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+            <thead style={{ 
+              position: 'sticky', 
+              top: 0, 
+              zIndex: 10, 
+              background: 'var(--sidebar-bg)' 
+            }}>
+              <tr>
+                <th style={{ padding: '6px 10px' }}>CLASS NAME</th>
+                <th style={{ padding: '6px 10px' }}>STREAM</th>
+                <th style={{ padding: '6px 10px' }}>STAGE</th>
+                <th style={{ padding: '6px 10px' }}>TEACHER</th>
+                <th style={{ padding: '6px 10px' }}>CAPACITY</th>
+                <th style={{ padding: '6px 10px' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {gradelevelClasses.map((classItem, index) => (
+                <tr 
+                  key={classItem.id} 
+                  style={{ 
+                    height: '32px', 
+                    backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                  }}
+                >
+                  <td style={{ padding: '4px 10px' }}>
+                    {classItem.name}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>
+                    {classItem.stream_name || 'N/A'}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>
+                    {classItem.stream_stage || 'N/A'}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>
+                    {classItem.teacher_name || 'Not Assigned'}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>
+                    {classItem.capacity || 'Unlimited'}
+                  </td>
+                  <td style={{ padding: '4px 10px' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <button
+                        onClick={() => handleViewClass(classItem.id)}
+                        style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title="View"
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                      </button>
+                      <button
+                        onClick={() => handleEditClass(classItem.id)}
+                        style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title="Edit"
+                      >
+                        <FontAwesomeIcon icon={faEdit} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(classItem)}
+                        style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title="Delete"
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {/* Empty placeholder rows to always show 25 rows */}
+              {Array.from({ length: Math.max(0, 25 - gradelevelClasses.length) }).map((_, index) => (
+                <tr 
+                  key={`empty-${index}`}
+                  style={{ 
+                    height: '32px', 
+                    backgroundColor: (gradelevelClasses.length + index) % 2 === 0 ? '#fafafa' : '#f3f4f6' 
+                  }}
+                >
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                  <td style={{ padding: '4px 10px' }}>&nbsp;</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
 
             </div>
 
       {/* Pagination Footer */}
-        <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
-          <div className="table-footer-left">
-            Showing {displayStart} to {displayEnd} of {totalClasses || 0} results.
-          </div>
-          <div className="table-footer-right">
-            {!activeSearchTerm && totalPages > 1 && (
-              <div className="pagination-controls">
-                <button
-                  className="pagination-btn"
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  className="pagination-btn"
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            )}
-            {!activeSearchTerm && totalPages <= 1 && (
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                All data displayed
-              </div>
-            )}
-          </div>
+      <div className="ecl-table-footer" style={{ flexShrink: 0 }}>
+        <div className="table-footer-left">
+          Showing {displayStart} to {displayEnd} of {totalClasses || 0} results.
         </div>
+        <div className="table-footer-right">
+          {!activeSearchTerm && totalPages > 1 && (
+            <div className="pagination-controls">
+              <button
+                className="pagination-btn"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="pagination-info" style={{ fontSize: '0.7rem' }}>
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                className="pagination-btn"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
+          {!activeSearchTerm && totalPages <= 1 && (
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+              All data displayed
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Add Class Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={handleCloseModal}>
-          <div
-            className="modal-dialog"
-            onClick={(e) => e.stopPropagation()}
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
             style={{ maxWidth: '600px', minHeight: isLoading ? '400px' : 'auto' }}
           >
             {isLoading ? (
@@ -998,14 +998,14 @@ const Classes = () => {
                     </svg>
                   </button>
                 </div>
-
+                
                 <div className="modal-body">
                   {formError && (
                     <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
                       {formError}
                     </div>
                   )}
-
+                  
                   <form onSubmit={handleSave} className="modal-form">
                     <div className="form-group">
                       <label className="form-label">
@@ -1021,7 +1021,7 @@ const Classes = () => {
                         required
                       />
                     </div>
-
+                    
                     <div className="form-group">
                       <label className="form-label">
                         Stream <span className="required">*</span>
@@ -1041,7 +1041,7 @@ const Classes = () => {
                         ))}
                       </select>
                     </div>
-
+                    
                     <div className="form-group">
                       <label className="form-label">Capacity</label>
                       <input
@@ -1054,7 +1054,7 @@ const Classes = () => {
                         min="1"
                       />
                     </div>
-
+                    
                     <div className="form-group">
                       <label className="form-label">Homeroom Teacher</label>
                       <select
@@ -1073,13 +1073,13 @@ const Classes = () => {
                     </div>
                   </form>
                 </div>
-
+                
                 <div className="modal-footer">
                   <button className="modal-btn modal-btn-cancel" onClick={handleCloseModal}>
                     Cancel
                   </button>
-                  <button
-                    className="modal-btn modal-btn-confirm"
+                  <button 
+                    className="modal-btn modal-btn-confirm" 
                     onClick={handleSave}
                     disabled={!isFormValid() || isLoading}
                   >
@@ -1095,9 +1095,9 @@ const Classes = () => {
       {/* Edit Class Modal */}
       {showEditModal && (
         <div className="modal-overlay" onClick={handleCloseEditModal}>
-          <div
-            className="modal-dialog"
-            onClick={(e) => e.stopPropagation()}
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
             style={{ maxWidth: '600px', minHeight: editModalLoading ? '400px' : 'auto' }}
           >
             {editModalLoading ? (
@@ -1128,14 +1128,14 @@ const Classes = () => {
                     </svg>
                   </button>
                 </div>
-
+                
                 <div className="modal-body">
                   {editFormError && (
                     <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
                       {editFormError}
                     </div>
                   )}
-
+                  
                   <form onSubmit={handleUpdateClass} className="modal-form">
                     <div className="form-group">
                       <label className="form-label">
@@ -1151,7 +1151,7 @@ const Classes = () => {
                         required
                       />
                     </div>
-
+                    
                     <div className="form-group">
                       <label className="form-label">
                         Stream <span className="required">*</span>
@@ -1171,7 +1171,7 @@ const Classes = () => {
                         ))}
                       </select>
                     </div>
-
+                    
                     <div className="form-group">
                       <label className="form-label">Capacity</label>
                       <input
@@ -1184,7 +1184,7 @@ const Classes = () => {
                         min="1"
                       />
                     </div>
-
+                    
                     <div className="form-group">
                       <label className="form-label">Homeroom Teacher</label>
                       <select
@@ -1203,13 +1203,13 @@ const Classes = () => {
                     </div>
                   </form>
                 </div>
-
+                
                 <div className="modal-footer">
                   <button className="modal-btn modal-btn-cancel" onClick={handleCloseEditModal}>
                     Cancel
                   </button>
-                  <button
-                    className="modal-btn modal-btn-confirm"
+                  <button 
+                    className="modal-btn modal-btn-confirm" 
                     onClick={handleUpdateClass}
                     disabled={!isEditFormValid() || isSaving}
                   >
@@ -1225,9 +1225,9 @@ const Classes = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && classToDelete && (
         <div className="modal-overlay" onClick={handleCloseDeleteModal}>
-          <div
-            className="modal-dialog"
-            onClick={(e) => e.stopPropagation()}
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
             style={{ maxWidth: '500px' }}
           >
             <div className="modal-header">
@@ -1239,16 +1239,16 @@ const Classes = () => {
                 </svg>
               </button>
             </div>
-
+            
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  background: '#fee2e2',
-                  display: 'flex',
-                  alignItems: 'center',
+                <div style={{ 
+                  width: '48px', 
+                  height: '48px', 
+                  borderRadius: '50%', 
+                  background: '#fee2e2', 
+                  display: 'flex', 
+                  alignItems: 'center', 
                   justifyContent: 'center',
                   flexShrink: 0
                 }}>
@@ -1267,10 +1267,10 @@ const Classes = () => {
                   </p>
                 </div>
               </div>
-
-              <div style={{
-                padding: '12px',
-                background: '#f9fafb',
+              
+              <div style={{ 
+                padding: '12px', 
+                background: '#f9fafb', 
                 borderRadius: '4px',
                 border: '1px solid #e5e7eb'
               }}>
@@ -1279,22 +1279,22 @@ const Classes = () => {
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                   <strong>Name:</strong> {classToDelete.name}
-                </div>
+                  </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                   <strong>Stream:</strong> {classToDelete.stream_name || 'N/A'}
                 </div>
               </div>
             </div>
-
+            
             <div className="modal-footer">
-              <button
-                className="modal-btn modal-btn-cancel"
+              <button 
+                className="modal-btn modal-btn-cancel" 
                 onClick={handleCloseDeleteModal}
                 disabled={isDeleting}
               >
                 Cancel
               </button>
-              <button
+              <button 
                 className="modal-btn modal-btn-delete"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
@@ -1309,9 +1309,9 @@ const Classes = () => {
       {/* Delete Stream Modal */}
       {streamToDelete && (
         <div className="modal-overlay" onClick={() => !isDeletingStream && setStreamToDelete(null)}>
-          <div
-            className="modal-dialog"
-            onClick={(e) => e.stopPropagation()}
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
             style={{ maxWidth: '420px' }}
           >
             <div className="modal-header">
@@ -1327,13 +1327,13 @@ const Classes = () => {
             </div>
             <div className="modal-body">
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '16px' }}>
-                <div style={{
+                <div style={{ 
                   width: '40px',
                   height: '40px',
-                  borderRadius: '50%',
+                  borderRadius: '50%', 
                   background: '#fef2f2',
-                  display: 'flex',
-                  alignItems: 'center',
+                  display: 'flex', 
+                  alignItems: 'center', 
                   justifyContent: 'center',
                   flexShrink: 0
                 }}>
@@ -1348,9 +1348,9 @@ const Classes = () => {
                   </p>
                 </div>
               </div>
-              <div style={{
-                padding: '12px',
-                background: '#f9fafb',
+              <div style={{ 
+                padding: '12px', 
+                background: '#f9fafb', 
                 borderRadius: '4px',
                 border: '1px solid #e5e7eb'
               }}>
@@ -1360,8 +1360,8 @@ const Classes = () => {
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                   <strong>{streamToDelete.name}</strong> ({streamToDelete.stage})
                 </div>
+                </div>
               </div>
-            </div>
             <div className="modal-footer">
               <button
                 type="button"
@@ -1446,17 +1446,17 @@ const Classes = () => {
               </div>
             </div>
             <div className="modal-footer">
-              <button
+              <button 
                 type="button"
-                className="modal-btn modal-btn-cancel"
+                className="modal-btn modal-btn-cancel" 
                 onClick={() => setSubjectToDelete(null)}
                 disabled={isDeletingSubject}
               >
                 Cancel
               </button>
-              <button
+              <button 
                 type="button"
-                className="modal-btn modal-btn-delete"
+                className="modal-btn modal-btn-delete" 
                 onClick={handleConfirmDeleteSubject}
                 disabled={isDeletingSubject}
               >
@@ -1470,9 +1470,9 @@ const Classes = () => {
       {/* Bulk Term Year Modal */}
       {showBulkTermYearModal && (
         <div className="modal-overlay" onClick={() => setShowBulkTermYearModal(false)}>
-          <div
-            className="modal-dialog"
-            onClick={(e) => e.stopPropagation()}
+          <div 
+            className="modal-dialog" 
+            onClick={(e) => e.stopPropagation()} 
             style={{ maxWidth: '500px' }}
           >
             <div className="modal-header">
@@ -1481,7 +1481,7 @@ const Classes = () => {
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
-
+            
             <div className="modal-body">
               <form onSubmit={handleBulkTermYearSubmit} className="modal-form">
                 <div className="form-group">
@@ -1499,7 +1499,7 @@ const Classes = () => {
                     <option value="3">Term 3</option>
                   </select>
                 </div>
-
+                
                 <div className="form-group">
                   <label className="form-label">Academic Year <span className="required">*</span></label>
                   <input
@@ -1512,7 +1512,7 @@ const Classes = () => {
                     required
                   />
                 </div>
-
+                
                 <div className="form-group">
                   <label className="form-label">Start Date <span className="required">*</span></label>
                   <input
@@ -1524,7 +1524,7 @@ const Classes = () => {
                     required
                   />
                 </div>
-
+                
                 <div className="form-group">
                   <label className="form-label">End Date <span className="required">*</span></label>
                   <input
@@ -1538,7 +1538,7 @@ const Classes = () => {
                 </div>
               </form>
             </div>
-
+            
             <div className="modal-footer">
               <button className="modal-btn modal-btn-cancel" onClick={() => setShowBulkTermYearModal(false)}>
                 Cancel
@@ -1557,8 +1557,8 @@ const Classes = () => {
       {/* Add Gradelevel Class Modal */}
       {showAddGradelevelClassModal && (
         <div className="modal-overlay" onClick={() => setShowAddGradelevelClassModal(false)}>
-          <div
-            className="modal-dialog"
+          <div 
+            className="modal-dialog" 
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: '800px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}
           >
@@ -1584,8 +1584,8 @@ const Classes = () => {
       {/* Success Toast */}
       {toast.visible && toast.message && (
         <div className="success-toast">
-          <div
-            className="success-toast-content"
+          <div 
+            className="success-toast-content" 
             style={{ background: getToastBackgroundColor(toast.type) }}
           >
             {getToastIcon(toast.type)}

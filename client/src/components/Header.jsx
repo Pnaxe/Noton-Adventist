@@ -117,10 +117,10 @@ const Header = ({ onMenuClick }) => {
   const isSportsPage = location.pathname.startsWith('/dashboard/sports');
 
   // Check if we're on an accounting page
-  const isAccountingPage = location.pathname.startsWith('/dashboard/accounting') ||
-    location.pathname.startsWith('/dashboard/expenses') ||
-    location.pathname.startsWith('/dashboard/assets') ||
-    location.pathname.startsWith('/dashboard/reports');
+  const isAccountingPage = location.pathname.startsWith('/dashboard/accounting') || 
+                           location.pathname.startsWith('/dashboard/expenses') ||
+                           location.pathname.startsWith('/dashboard/assets') ||
+                           location.pathname.startsWith('/dashboard/reports');
 
   // Check if we're on an inventory page
   const isInventoryPage = location.pathname.startsWith('/dashboard/inventory');
@@ -536,13 +536,13 @@ const Header = ({ onMenuClick }) => {
           </button>
           {!isSportsPage && !isAccountingPage && !isBillingPage && !isClassesPage && !isBoardingPage && !isSettingsPage && (
             <>
-              <img src={logo} alt="Logo" className="top-nav-logo" />
-              <span className="hidden md:inline" style={{
-                fontSize: '1rem',
-                fontWeight: 'bold',
-                color: 'var(--text-primary)',
-                marginLeft: '4px',
-                whiteSpace: 'nowrap'
+          <img src={logo} alt="Logo" className="top-nav-logo" />
+          <span className="hidden md:inline" style={{
+            fontSize: '1rem',
+            fontWeight: 'bold',
+            color: 'var(--text-primary)',
+            marginLeft: '4px',
+            whiteSpace: 'nowrap'
               }}>Norton Adventist</span>
             </>
           )}
@@ -562,51 +562,51 @@ const Header = ({ onMenuClick }) => {
           const activeInMore = overflowTabs.some(t => t.id === displayActiveTab);
           return (
             <div className={`top-nav-center ${isSmallScreen ? 'top-nav-center--hidden' : ''}`} style={{
-              position: 'absolute',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0'
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0'
             }} ref={topNavMenuRef}>
               {visibleTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => onSportsTabChange && onSportsTabChange(tab.id)}
-                  className={`top-nav-menu-item ${displayActiveTab === tab.id ? 'active' : ''}`}
-                  style={{
-                    padding: '12px 20px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    color: displayActiveTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
-                    borderBottom: displayActiveTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (displayActiveTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-primary)';
-                      e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (displayActiveTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
-                  {tab.label}
+              <button
+                key={tab.id}
+                onClick={() => onSportsTabChange && onSportsTabChange(tab.id)}
+                className={`top-nav-menu-item ${displayActiveTab === tab.id ? 'active' : ''}`}
+                style={{
+                  padding: '12px 20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: displayActiveTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
+                  borderBottom: displayActiveTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  if (displayActiveTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (displayActiveTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
+                {tab.label}
                 </button>
               ))}
               {showMore && (
@@ -659,10 +659,10 @@ const Header = ({ onMenuClick }) => {
                         >
                           <FontAwesomeIcon icon={tab.icon} className="dropdown-icon" />
                           <span>{tab.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              </button>
+            ))}
+          </div>
+        )}
                 </div>
               )}
             </div>
@@ -683,54 +683,54 @@ const Header = ({ onMenuClick }) => {
           const activeInMore = overflowTabs.some(t => t.id === displayActiveAccountingTab);
           return (
             <div className={`top-nav-center ${isSmallScreen ? 'top-nav-center--hidden' : ''}`} style={{
-              position: 'absolute',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0'
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0'
             }} ref={topNavMenuRef}>
               {visibleTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => {
+              <button
+                key={tab.id}
+                onClick={() => {
                     if (onAccountingTabChange) onAccountingTabChange(tab.id);
-                    navigate(tab.path);
-                  }}
-                  className={`top-nav-menu-item ${displayActiveAccountingTab === tab.id ? 'active' : ''}`}
-                  style={{
-                    padding: '12px 20px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    color: displayActiveAccountingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
-                    borderBottom: displayActiveAccountingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (displayActiveAccountingTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-primary)';
-                      e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (displayActiveAccountingTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
-                  {tab.label}
+                  navigate(tab.path);
+                }}
+                className={`top-nav-menu-item ${displayActiveAccountingTab === tab.id ? 'active' : ''}`}
+                style={{
+                  padding: '12px 20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: displayActiveAccountingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
+                  borderBottom: displayActiveAccountingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  if (displayActiveAccountingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (displayActiveAccountingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
+                {tab.label}
                 </button>
               ))}
               {showMore && (
@@ -784,12 +784,12 @@ const Header = ({ onMenuClick }) => {
                         >
                           <FontAwesomeIcon icon={tab.icon} className="dropdown-icon" />
                           <span>{tab.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              </button>
+            ))}
+          </div>
+        )}
+          </div>
+        )}
             </div>
           );
         })()}
@@ -806,51 +806,51 @@ const Header = ({ onMenuClick }) => {
           const activeInMore = overflowTabs.some(t => t.id === displayActiveClassesTab);
           return (
             <div className={`top-nav-center ${isSmallScreen ? 'top-nav-center--hidden' : ''}`} style={{
-              position: 'absolute',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0'
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0'
             }} ref={topNavMenuRef}>
               {visibleTabs.map(tab => (
-                <button
-                  key={tab.id}
+              <button
+                key={tab.id}
                   onClick={() => navigate(tab.path)}
                   className={`top-nav-menu-item ${displayActiveClassesTab === tab.id ? 'active' : ''}`}
-                  style={{
-                    padding: '12px 20px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
+                style={{
+                  padding: '12px 20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
                     color: displayActiveClassesTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
                     borderBottom: displayActiveClassesTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                  onMouseEnter={(e) => {
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
                     if (displayActiveClassesTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-primary)';
-                      e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
                     if (displayActiveClassesTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
-                  {tab.label}
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
+                {tab.label}
                 </button>
               ))}
               {showMore && (
@@ -903,10 +903,10 @@ const Header = ({ onMenuClick }) => {
                         >
                           <FontAwesomeIcon icon={tab.icon} className="dropdown-icon" />
                           <span>{tab.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              </button>
+            ))}
+          </div>
+        )}
                 </div>
               )}
             </div>
@@ -928,56 +928,56 @@ const Header = ({ onMenuClick }) => {
           const activeInMore = overflowTabs.some(t => t.id === activeBoardingTab);
           return (
             <div className={`top-nav-center ${isSmallScreen ? 'top-nav-center--hidden' : ''}`} style={{
-              position: 'absolute',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0'
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0'
             }} ref={topNavMenuRef}>
               {visibleTabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    if (onBoardingTabChange) {
-                      onBoardingTabChange(tab.id);
-                    }
-                    navigate(tab.path);
-                  }}
-                  className={`top-nav-menu-item ${activeBoardingTab === tab.id ? 'active' : ''}`}
-                  style={{
-                    padding: '12px 20px',
-                    fontSize: '0.8rem',
-                    fontWeight: 600,
-                    color: activeBoardingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
-                    borderBottom: activeBoardingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap',
-                    textDecoration: 'none',
-                    cursor: 'pointer',
-                    background: 'transparent',
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (activeBoardingTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-primary)';
-                      e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (activeBoardingTab !== tab.id) {
-                      e.currentTarget.style.color = 'var(--text-secondary)';
-                      e.currentTarget.style.background = 'transparent';
-                    }
-                  }}
-                >
-                  <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
-                  {tab.label}
+              <button
+                key={tab.id}
+                onClick={() => {
+                  if (onBoardingTabChange) {
+                    onBoardingTabChange(tab.id);
+                  }
+                  navigate(tab.path);
+                }}
+                className={`top-nav-menu-item ${activeBoardingTab === tab.id ? 'active' : ''}`}
+                style={{
+                  padding: '12px 20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  color: activeBoardingTab === tab.id ? '#2563eb' : 'var(--text-secondary)',
+                  borderBottom: activeBoardingTab === tab.id ? '2px solid #2563eb' : '2px solid transparent',
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  background: 'transparent',
+                  borderTop: 'none',
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  if (activeBoardingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-primary)';
+                    e.currentTarget.style.background = 'rgba(0, 0, 0, 0.02)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeBoardingTab !== tab.id) {
+                    e.currentTarget.style.color = 'var(--text-secondary)';
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <FontAwesomeIcon icon={tab.icon} style={{ fontSize: '0.75rem' }} />
+                {tab.label}
                 </button>
               ))}
               {showMore && (
@@ -1033,10 +1033,10 @@ const Header = ({ onMenuClick }) => {
                         >
                           <FontAwesomeIcon icon={tab.icon} className="dropdown-icon" />
                           <span>{tab.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              </button>
+            ))}
+          </div>
+        )}
                 </div>
               )}
             </div>
@@ -1384,42 +1384,42 @@ const Header = ({ onMenuClick }) => {
             }}
           >
             <div ref={dropdownRef} className="top-nav-user-info-inner">
-              <div
-                className="top-nav-avatar"
-                onClick={() => setShowDropdown(!showDropdown)}
+            <div
+              className="top-nav-avatar"
+              onClick={() => setShowDropdown(!showDropdown)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowDropdown(!showDropdown); } }}
                 aria-label="User menu"
-              >
-                {getInitials()}
-              </div>
-
-              {/* Dropdown Menu */}
-              {showDropdown && (
-                <div className="avatar-dropdown">
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      setShowPasswordModal(true);
-                      setShowDropdown(false);
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faCog} className="dropdown-icon" />
-                    <span>Settings</span>
-                  </button>
-                  <button
-                    className="dropdown-item logout"
-                    onClick={handleLogout}
-                  >
-                    <FontAwesomeIcon icon={faSignOutAlt} className="dropdown-icon" />
-                    <span>Logout</span>
-                  </button>
-                </div>
-              )}
+            >
+              {getInitials()}
             </div>
+
+            {/* Dropdown Menu */}
+            {showDropdown && (
+              <div className="avatar-dropdown">
+                <button
+                  className="dropdown-item"
+                  onClick={() => {
+                      setShowPasswordModal(true);
+                    setShowDropdown(false);
+                  }}
+                >
+                  <FontAwesomeIcon icon={faCog} className="dropdown-icon" />
+                  <span>Settings</span>
+                </button>
+                <button
+                  className="dropdown-item logout"
+                  onClick={handleLogout}
+                >
+                  <FontAwesomeIcon icon={faSignOutAlt} className="dropdown-icon" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
+      </div>
       </div>
 
       {/* Password Change Modal - Rendered via Portal to ensure it covers sidebar */}

@@ -1056,3 +1056,10 @@ body::-webkit-scrollbar {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Loading Spinner Animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

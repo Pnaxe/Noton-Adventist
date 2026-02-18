@@ -53,6 +53,49 @@ const StudentLogin = () => {
 
   return (
     <div className="min-h-screen flex bg-gray-50">
+      {/* Full-page loading overlay */}
+      {isLoading && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(2px)'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            padding: '32px 48px',
+            borderRadius: '12px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.2)'
+          }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              border: '4px solid #e5e7eb',
+              borderTopColor: '#16a34a',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            <p style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: 500,
+              color: '#1e293b',
+              fontFamily: 'Nunito, sans-serif'
+            }}>Signing in...</p>
+          </div>
+        </div>
+      )}
       {/* Left side - Login Form */}
       <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
@@ -86,7 +129,8 @@ const StudentLogin = () => {
                     required
                     value={formData.regNumber}
                     onChange={handleChange}
-                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                    disabled={isLoading}
+                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ fontFamily: 'Nunito, sans-serif', fontSize: '0.875rem' }}
                     placeholder="Enter your registration number"
                   />
@@ -109,7 +153,8 @@ const StudentLogin = () => {
                     required
                     value={formData.password}
                     onChange={handleChange}
-                    className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm"
+                    disabled={isLoading}
+                    className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-green-500 focus:border-green-500 sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     style={{ fontFamily: 'Nunito, sans-serif', fontSize: '0.875rem' }}
                     placeholder="Enter your password"
                   />
