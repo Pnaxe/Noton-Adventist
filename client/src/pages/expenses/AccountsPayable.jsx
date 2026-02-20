@@ -4,7 +4,7 @@ import BASE_URL from '../../contexts/Api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEye, faSearch, faPlus, faEdit, faTrash, faUndo } from '@fortawesome/free-solid-svg-icons';
+import { faEye, faSearch, faPlus, faEdit, faTrash, faUndo, faFileInvoiceDollar, faReceipt } from '@fortawesome/free-solid-svg-icons';
 
 const AccountsPayable = () => {
   const { token } = useAuth();
@@ -54,6 +54,7 @@ const AccountsPayable = () => {
   const [selectedPayableForEdit, setSelectedPayableForEdit] = useState(null);
   const [selectedPayableForDelete, setSelectedPayableForDelete] = useState(null);
   const [selectedPaymentToReverse, setSelectedPaymentToReverse] = useState(null);
+  const [showReverseConfirmModal, setShowReverseConfirmModal] = useState(false);
   const [editForm, setEditForm] = useState({ description: '', due_date: '', reference_number: '' });
   const [editLoading, setEditLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -162,6 +163,7 @@ const AccountsPayable = () => {
   const handleViewTransactions = async (payable) => {
     setSelectedPayableForView(payable);
     setShowViewModal(true);
+    setTransactionsLoading(true);
     await fetchTransactions(payable.id);
   };
 
@@ -223,16 +225,23 @@ const AccountsPayable = () => {
     setShowReversePaymentModal(true);
   };
 
-  const handleConfirmReversePayment = async (paymentId) => {
-    if (!selectedPayableForView) return;
+  const handleReversePaymentClick = (payment) => {
+    setSelectedPaymentToReverse(payment);
+    setShowReverseConfirmModal(true);
+  };
+
+  const handleConfirmReversePayment = async () => {
+    if (!selectedPayableForView || !selectedPaymentToReverse) return;
     setReverseLoading(true);
     try {
       await axios.post(
-        `${BASE_URL}/expenses/accounts-payable/${selectedPayableForView.id}/payments/${paymentId}/reverse`,
+        `${BASE_URL}/expenses/accounts-payable/${selectedPayableForView.id}/payments/${selectedPaymentToReverse.id}/reverse`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      setShowReverseConfirmModal(false);
       setShowReversePaymentModal(false);
+      setSelectedPaymentToReverse(null);
       fetchPayables();
       fetchSummary();
       await fetchTransactions(selectedPayableForView.id);
@@ -521,44 +530,209 @@ const AccountsPayable = () => {
         </div>
       )}
 
-      {/* View Transactions Modal */}
-      {showViewModal && selectedPayableForView && (
+      {/* View Transactions Modal - styled like Students modal */}
+      {showViewModal && (
         <div className="modal-overlay" onClick={() => setShowViewModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Transaction History</h3>
-              <button type="button" className="modal-close-btn" onClick={() => setShowViewModal(false)} aria-label="Close">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-              </button>
-            </div>
-            <div className="modal-body" style={{ overflow: 'auto' }}>
-              <div style={{ marginBottom: '16px', padding: '12px', background: 'var(--sidebar-bg)', color: '#fff', borderRadius: '8px', fontSize: '0.8125rem' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
-                  <div><span style={{ opacity: 0.9 }}>Payable To</span><div style={{ fontWeight: 600 }}>{selectedPayableForView.payable_to || 'Non-Supplier'}</div></div>
-                  <div><span style={{ opacity: 0.9 }}>Outstanding</span><div style={{ fontWeight: 600 }}>{formatCurrency(selectedPayableForView.outstanding_balance, selectedPayableForView.currency_code)}</div></div>
-                  <div><span style={{ opacity: 0.9 }}>Status</span><div><span className={`px-2 py-1 text-xs rounded ${getStatusColor(selectedPayableForView.status)}`}>{selectedPayableForView.status}</span></div></div>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '800px', minHeight: transactionsLoading ? '400px' : 'auto' }}
+          >
+            {transactionsLoading ? (
+              // Loading State
+              <>
+                <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ height: '20px', width: '200px', background: '#e5e7eb', borderRadius: '4px' }}></div>
+                  <div style={{ width: '18px', height: '18px', background: '#e5e7eb', borderRadius: '4px' }}></div>
                 </div>
-              </div>
-              {transactionsLoading ? (
-                <div className="loading-spinner" style={{ margin: '24px auto' }} />
-              ) : transactions.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No transactions found.</p>
-              ) : (
-                <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                  <thead><tr><th style={{ padding: '6px 10px' }}>DATE</th><th style={{ padding: '6px 10px' }}>AMOUNT</th><th style={{ padding: '6px 10px' }}>METHOD</th><th style={{ padding: '6px 10px' }}>DESCRIPTION</th></tr></thead>
-                  <tbody>
-                    {transactions.map((t) => (
-                      <tr key={t.id} style={{ backgroundColor: '#fafafa' }}>
-                        <td style={{ padding: '6px 10px' }}>{new Date(t.payment_date).toLocaleDateString()}</td>
-                        <td style={{ padding: '6px 10px' }}>{formatCurrency(t.amount_paid, selectedPayableForView.currency_code)}</td>
-                        <td style={{ padding: '6px 10px' }}>{t.payment_method}</td>
-                        <td style={{ padding: '6px 10px' }}>{t.description || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
+                <div className="modal-body" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', flex: '1', minHeight: '300px' }}>
+                  <div className="loading-spinner"></div>
+                  <p style={{ marginTop: '15px', color: 'var(--text-secondary)' }}>Loading payable details...</p>
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <div style={{ height: '32px', width: '80px', background: '#e5e7eb', borderRadius: '4px' }}></div>
+                </div>
+              </>
+            ) : selectedPayableForView ? (
+              // Content State
+              <>
+                <div className="modal-header">
+                  <h3 className="modal-title" style={{ color: '#000000' }}>
+                    Accounts Payable Details
+                  </h3>
+                  <button className="modal-close-btn" onClick={() => setShowViewModal(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="modal-body">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {/* Payable Information Section */}
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FontAwesomeIcon icon={faFileInvoiceDollar} style={{ color: '#2563eb' }} />
+                        Payable Information
+                      </h4>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 30px' }}>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Payable To
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                            {selectedPayableForView.payable_to || 'Non-Supplier'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Status
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                            <span className={`px-2 py-1 text-xs rounded ${getStatusColor(selectedPayableForView.status)}`}>{selectedPayableForView.status}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Original Amount
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                            {formatCurrency(selectedPayableForView.original_amount, selectedPayableForView.currency_code)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Paid Amount
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: '600' }}>
+                            {formatCurrency(selectedPayableForView.paid_amount, selectedPayableForView.currency_code)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Outstanding Balance
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#dc2626', fontWeight: '600' }}>
+                            {formatCurrency(selectedPayableForView.outstanding_balance, selectedPayableForView.currency_code)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Currency
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                            {selectedPayableForView.currency_code || 'USD'}
+                          </div>
+                        </div>
+
+                        {selectedPayableForView.due_date && (
+                          <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                              Due Date
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                              {new Date(selectedPayableForView.due_date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedPayableForView.reference_number && (
+                          <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                              Reference Number
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                              {selectedPayableForView.reference_number}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedPayableForView.description && (
+                          <div style={{ gridColumn: '1 / -1' }}>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                              Description
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                              {selectedPayableForView.description}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedPayableForView.expense_date && (
+                          <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                              Expense Date
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                              {new Date(selectedPayableForView.expense_date).toLocaleDateString()}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedPayableForView.source_type && (
+                          <div>
+                            <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                              Source Type
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                              {selectedPayableForView.source_type}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Payment History Section */}
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FontAwesomeIcon icon={faReceipt} style={{ color: '#10b981' }} />
+                        Payment History
+                      </h4>
+
+                      {transactions.length === 0 ? (
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No payment transactions found.</p>
+                      ) : (
+                        <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ padding: '6px 10px' }}>DATE</th>
+                              <th style={{ padding: '6px 10px' }}>AMOUNT</th>
+                              <th style={{ padding: '6px 10px' }}>METHOD</th>
+                              <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {transactions.map((t, index) => (
+                              <tr key={t.id} style={{ backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
+                                <td style={{ padding: '6px 10px' }}>{new Date(t.payment_date).toLocaleDateString()}</td>
+                                <td style={{ padding: '6px 10px', fontWeight: '600', color: '#10b981' }}>
+                                  {formatCurrency(t.amount_paid, selectedPayableForView.currency_code)}
+                                </td>
+                                <td style={{ padding: '6px 10px' }}>{t.payment_method || '—'}</td>
+                                <td style={{ padding: '6px 10px' }}>{t.description || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button className="modal-btn modal-btn-cancel" onClick={() => setShowViewModal(false)}>
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}
@@ -700,58 +874,218 @@ const AccountsPayable = () => {
         </div>
       )}
 
-      {/* Reverse Payment Modal */}
+      {/* Reverse Payment Modal - styled like Students modal */}
       {showReversePaymentModal && selectedPayableForView && (
         <div className="modal-overlay" onClick={() => !reverseLoading && setShowReversePaymentModal(false)} role="dialog" aria-modal="true">
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '800px', minHeight: transactionsLoading ? '400px' : 'auto' }}
+          >
+            {transactionsLoading ? (
+              // Loading State
+              <>
+                <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ height: '20px', width: '200px', background: '#e5e7eb', borderRadius: '4px' }}></div>
+                  <div style={{ width: '18px', height: '18px', background: '#e5e7eb', borderRadius: '4px' }}></div>
+                </div>
+                <div className="modal-body" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', flex: '1', minHeight: '300px' }}>
+                  <div className="loading-spinner"></div>
+                  <p style={{ marginTop: '15px', color: 'var(--text-secondary)' }}>Loading payment history...</p>
+                </div>
+                <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                  <div style={{ height: '32px', width: '80px', background: '#e5e7eb', borderRadius: '4px' }}></div>
+                </div>
+              </>
+            ) : (
+              // Content State
+              <>
+                <div className="modal-header">
+                  <h3 className="modal-title" style={{ color: '#000000' }}>
+                    Reverse Payment
+                  </h3>
+                  <button className="modal-close-btn" onClick={() => !reverseLoading && setShowReversePaymentModal(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="modal-body">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    {/* Payable Summary Section */}
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FontAwesomeIcon icon={faFileInvoiceDollar} style={{ color: '#2563eb' }} />
+                        Payable Summary
+                      </h4>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 30px' }}>
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Payable To
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                            {selectedPayableForView.payable_to || 'Non-Supplier'}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Outstanding Balance
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#dc2626', fontWeight: '600' }}>
+                            {formatCurrency(selectedPayableForView.outstanding_balance, selectedPayableForView.currency_code)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Paid Amount
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: '600' }}>
+                            {formatCurrency(selectedPayableForView.paid_amount, selectedPayableForView.currency_code)}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                            Status
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: '400' }}>
+                            <span className={`px-2 py-1 text-xs rounded ${getStatusColor(selectedPayableForView.status)}`}>{selectedPayableForView.status}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment History Section */}
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FontAwesomeIcon icon={faReceipt} style={{ color: '#f59e0b' }} />
+                        Select Payment to Reverse
+                      </h4>
+
+                      {transactions.length === 0 ? (
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No payments found to reverse.</p>
+                      ) : (
+                        <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ padding: '6px 10px' }}>DATE</th>
+                              <th style={{ padding: '6px 10px' }}>AMOUNT</th>
+                              <th style={{ padding: '6px 10px' }}>METHOD</th>
+                              <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+                              <th style={{ padding: '6px 10px', width: '80px' }}>ACTION</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {transactions.map((t, index) => (
+                              <tr key={t.id} style={{ backgroundColor: index % 2 === 0 ? '#fafafa' : '#f3f4f6' }}>
+                                <td style={{ padding: '6px 10px' }}>{new Date(t.payment_date).toLocaleDateString()}</td>
+                                <td style={{ padding: '6px 10px', fontWeight: '600', color: '#10b981' }}>
+                                  {formatCurrency(t.amount_paid, selectedPayableForView.currency_code)}
+                                </td>
+                                <td style={{ padding: '6px 10px' }}>{t.payment_method || '—'}</td>
+                                <td style={{ padding: '6px 10px' }}>{t.description || '—'}</td>
+                                <td style={{ padding: '6px 10px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReversePaymentClick(t)}
+                                    disabled={reverseLoading}
+                                    style={{
+                                      color: '#f59e0b',
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: reverseLoading ? 'not-allowed' : 'pointer',
+                                      padding: '4px 8px',
+                                      borderRadius: '4px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '600',
+                                      opacity: reverseLoading ? 0.5 : 1
+                                    }}
+                                    title="Reverse this payment"
+                                  >
+                                    <FontAwesomeIcon icon={faUndo} style={{ marginRight: '4px' }} />
+                                    Reverse
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button className="modal-btn modal-btn-cancel" onClick={() => setShowReversePaymentModal(false)} disabled={reverseLoading}>
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Reverse Payment Confirmation Modal */}
+      {showReverseConfirmModal && selectedPaymentToReverse && selectedPayableForView && (
+        <div className="modal-overlay" onClick={() => !reverseLoading && setShowReverseConfirmModal(false)} role="dialog" aria-modal="true">
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
             <div className="modal-header">
-              <h3 className="modal-title">Reverse Payment</h3>
-              <button type="button" className="modal-close-btn" onClick={() => !reverseLoading && setShowReversePaymentModal(false)} aria-label="Close">
+              <h3 className="modal-title">Confirm Reverse Payment</h3>
+              <button type="button" className="modal-close-btn" onClick={() => !reverseLoading && setShowReverseConfirmModal(false)} aria-label="Close" disabled={reverseLoading}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
-            <div className="modal-body" style={{ overflow: 'auto' }}>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                Select a payment to reverse. This will undo the payment and restore the outstanding balance.
-              </p>
-              {transactionsLoading ? (
-                <div className="loading-spinner" style={{ margin: '24px auto' }} />
-              ) : transactions.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No payments found to reverse.</p>
-              ) : (
-                <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding: '6px 10px' }}>DATE</th>
-                      <th style={{ padding: '6px 10px' }}>AMOUNT</th>
-                      <th style={{ padding: '6px 10px' }}>METHOD</th>
-                      <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
-                      <th style={{ padding: '6px 10px' }}>ACTION</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.map((t) => (
-                      <tr key={t.id} style={{ backgroundColor: '#fafafa' }}>
-                        <td style={{ padding: '6px 10px' }}>{new Date(t.payment_date).toLocaleDateString()}</td>
-                        <td style={{ padding: '6px 10px' }}>{formatCurrency(t.amount_paid, selectedPayableForView.currency_code)}</td>
-                        <td style={{ padding: '6px 10px' }}>{t.payment_method}</td>
-                        <td style={{ padding: '6px 10px' }}>{t.description || '—'}</td>
-                        <td style={{ padding: '6px 10px' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmReversePayment(t.id)}
-                            disabled={reverseLoading}
-                            style={{ color: '#f59e0b', background: 'none', border: 'none', cursor: reverseLoading ? 'not-allowed' : 'pointer', padding: 0 }}
-                            title="Reverse this payment"
-                          >
-                            <FontAwesomeIcon icon={faUndo} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+            <div className="modal-body">
+              <div style={{ marginBottom: '16px' }}>
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                  Are you sure you want to reverse this payment?
+                </p>
+                <div style={{ padding: '12px', background: '#f3f4f6', borderRadius: '8px', fontSize: '0.8125rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Payment Date</div>
+                      <div style={{ fontWeight: '600' }}>{new Date(selectedPaymentToReverse.payment_date).toLocaleDateString()}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Amount</div>
+                      <div style={{ fontWeight: '600', color: '#10b981' }}>
+                        {formatCurrency(selectedPaymentToReverse.amount_paid, selectedPayableForView.currency_code)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Method</div>
+                      <div style={{ fontWeight: '600' }}>{selectedPaymentToReverse.payment_method || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Payable To</div>
+                      <div style={{ fontWeight: '600' }}>{selectedPayableForView.payable_to || 'Non-Supplier'}</div>
+                    </div>
+                  </div>
+                  {selectedPaymentToReverse.description && (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>Description</div>
+                      <div style={{ fontSize: '0.8125rem' }}>{selectedPaymentToReverse.description}</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ marginTop: '12px', padding: '10px', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '6px', fontSize: '0.75rem', color: '#92400e' }}>
+                  <strong>Warning:</strong> This action will reverse the journal entry, restore the outstanding balance, and cannot be undone.
+                </div>
+              </div>
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px', marginTop: '16px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" className="modal-btn modal-btn-cancel" onClick={() => setShowReverseConfirmModal(false)} disabled={reverseLoading}>
+                  Cancel
+                </button>
+                <button type="button" className="modal-btn modal-btn-confirm" onClick={handleConfirmReversePayment} disabled={reverseLoading} style={{ background: '#f59e0b' }}>
+                  {reverseLoading ? 'Reversing...' : 'Confirm Reverse'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
