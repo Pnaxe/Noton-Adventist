@@ -175,6 +175,85 @@ class AccountBalanceService {
     }
 
     /**
+     * Reverse account balances based on journal entry lines (opposite of updateAccountBalancesFromJournalEntry)
+     * @param {object} conn - Database connection
+     * @param {number} journalEntryId - Journal entry ID
+     * @param {number} currencyId - Currency ID (optional, defaults to 1 for USD)
+     */
+    static async reverseAccountBalancesFromJournalEntry(conn, journalEntryId, currencyId = 1) {
+        try {
+            console.log(`🔄 Reversing account balances for journal entry ${journalEntryId}...`);
+
+            // Get all journal entry lines for this journal entry with account type
+            const [journalLines] = await conn.execute(`
+                SELECT 
+                    jel.account_id, 
+                    jel.debit, 
+                    jel.credit, 
+                    jel.currency_id,
+                    coa.type as account_type
+                FROM journal_entry_lines jel
+                INNER JOIN chart_of_accounts coa ON jel.account_id = coa.id
+                WHERE jel.journal_entry_id = ?
+            `, [journalEntryId]);
+
+            if (journalLines.length === 0) {
+                console.log('⚠️ No journal entry lines found for journal entry:', journalEntryId);
+                return;
+            }
+
+            console.log(`📊 Found ${journalLines.length} journal entry lines to reverse`);
+
+            // Process each journal entry line (reverse the balance change)
+            for (const line of journalLines) {
+                const lineCurrencyId = line.currency_id || currencyId;
+                
+                // Calculate balance change based on account type (same as update)
+                const balanceChange = (line.account_type === 'Asset' || line.account_type === 'Expense')
+                    ? parseFloat(line.debit || 0) - parseFloat(line.credit || 0)
+                    : parseFloat(line.credit || 0) - parseFloat(line.debit || 0);
+                
+                if (Math.abs(balanceChange) < 0.01) {
+                    console.log(`⏭️ Skipping account ${line.account_id} (${line.account_type}) - no significant balance change`);
+                    continue;
+                }
+
+                // Reverse the change (subtract instead of add)
+                const reverseChange = -balanceChange;
+                console.log(`💰 Reversing account ${line.account_id} (${line.account_type}): ${balanceChange} → ${reverseChange > 0 ? '+' : ''}${reverseChange}`);
+
+                // Get current balance for this account and currency
+                const [currentBalance] = await conn.execute(`
+                    SELECT id, balance 
+                    FROM account_balances 
+                    WHERE account_id = ? AND currency_id = ? 
+                    ORDER BY as_of_date DESC 
+                    LIMIT 1
+                `, [line.account_id, lineCurrencyId]);
+
+                if (currentBalance.length > 0) {
+                    // Update existing balance (reverse the change)
+                    const newBalance = parseFloat(currentBalance[0].balance) + reverseChange;
+                    await conn.execute(`
+                        UPDATE account_balances 
+                        SET balance = ?, as_of_date = CURRENT_DATE 
+                        WHERE id = ?
+                    `, [newBalance, currentBalance[0].id]);
+                    
+                    console.log(`✅ Reversed balance for account ${line.account_id}: ${currentBalance[0].balance} → ${newBalance}`);
+                } else {
+                    console.log(`⚠️ No balance record found for account ${line.account_id} to reverse`);
+                }
+            }
+
+            console.log(`✅ Successfully reversed account balances for journal entry ${journalEntryId}`);
+        } catch (error) {
+            console.error('❌ Error reversing account balances:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Get current balance for a specific account and currency
      * @param {object} conn - Database connection
      * @param {number} accountId - Account ID

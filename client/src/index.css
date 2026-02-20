@@ -403,12 +403,13 @@
   padding-bottom: 6px;
 }
 
+/* Match Students page: same top spacing and header position as non-accounting pages */
 .main-content-scrollable--accounting {
-  padding-top: 160px;
+  padding-top: 80px;
 }
 
 .main-content-scrollable--accounting .report-header {
-  margin-top: 0;
+  margin-top: -20px;
 }
 
 .accounting-view-offset {

@@ -4,7 +4,7 @@ import BASE_URL from '../../contexts/Api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEye, faSearch, faPlus } from '@fortawesome/free-solid-svg-icons';
+import { faEye, faSearch, faPlus, faEdit, faTrash, faUndo } from '@fortawesome/free-solid-svg-icons';
 
 const AccountsPayable = () => {
   const { token } = useAuth();
@@ -47,6 +47,17 @@ const AccountsPayable = () => {
     currency_id: 1
   });
   const [openingBalanceLoading, setOpeningBalanceLoading] = useState(false);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showReversePaymentModal, setShowReversePaymentModal] = useState(false);
+  const [selectedPayableForEdit, setSelectedPayableForEdit] = useState(null);
+  const [selectedPayableForDelete, setSelectedPayableForDelete] = useState(null);
+  const [selectedPaymentToReverse, setSelectedPaymentToReverse] = useState(null);
+  const [editForm, setEditForm] = useState({ description: '', due_date: '', reference_number: '' });
+  const [editLoading, setEditLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [reverseLoading, setReverseLoading] = useState(false);
 
   const [toast, setToast] = useState({ message: null, type: 'success', visible: false });
 
@@ -152,6 +163,85 @@ const AccountsPayable = () => {
     setSelectedPayableForView(payable);
     setShowViewModal(true);
     await fetchTransactions(payable.id);
+  };
+
+  const handleEdit = (payable) => {
+    setSelectedPayableForEdit(payable);
+    setEditForm({
+      description: payable.description || '',
+      due_date: payable.due_date || '',
+      reference_number: payable.reference_number || ''
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    try {
+      await axios.put(`${BASE_URL}/expenses/accounts-payable/${selectedPayableForEdit.id}`, editForm, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setShowEditModal(false);
+      fetchPayables();
+      fetchSummary();
+      showToast('Accounts payable updated successfully.', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to update accounts payable', 'error');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const handleDelete = (payable) => {
+    setSelectedPayableForDelete(payable);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedPayableForDelete) return;
+    setDeleteLoading(true);
+    try {
+      await axios.delete(`${BASE_URL}/expenses/accounts-payable/${selectedPayableForDelete.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setShowDeleteModal(false);
+      fetchPayables();
+      fetchSummary();
+      showToast('Accounts payable deleted successfully.', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to delete accounts payable', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleReversePayment = async (payable) => {
+    // Fetch transactions to show in modal
+    await fetchTransactions(payable.id);
+    setSelectedPayableForView(payable);
+    setShowReversePaymentModal(true);
+  };
+
+  const handleConfirmReversePayment = async (paymentId) => {
+    if (!selectedPayableForView) return;
+    setReverseLoading(true);
+    try {
+      await axios.post(
+        `${BASE_URL}/expenses/accounts-payable/${selectedPayableForView.id}/payments/${paymentId}/reverse`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowReversePaymentModal(false);
+      fetchPayables();
+      fetchSummary();
+      await fetchTransactions(selectedPayableForView.id);
+      showToast('Payment reversed successfully.', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to reverse payment', 'error');
+    } finally {
+      setReverseLoading(false);
+    }
   };
 
   const handlePaymentSubmit = async (e) => {
@@ -330,11 +420,24 @@ const AccountsPayable = () => {
                   <td style={{ padding: '4px 10px', whiteSpace: 'nowrap' }}>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <button type="button" onClick={() => handleViewTransactions(payable)} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="View Transactions">
-                        <FontAwesomeIcon icon={faEye} className="h-3 w-3" />
+                        <FontAwesomeIcon icon={faEye} />
                       </button>
                       {payable.status !== 'paid' && (
-                        <button type="button" onClick={() => handleMakePayment(payable)} style={{ color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Pay</button>
+                        <button type="button" onClick={() => handleMakePayment(payable)} style={{ color: '#16a34a', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Make Payment">
+                          Pay
+                        </button>
                       )}
+                      {payable.paid_amount > 0 && (
+                        <button type="button" onClick={() => handleReversePayment(payable)} style={{ color: '#f59e0b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Reverse Payment">
+                          <FontAwesomeIcon icon={faUndo} />
+                        </button>
+                      )}
+                      <button type="button" onClick={() => handleEdit(payable)} style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Edit">
+                        <FontAwesomeIcon icon={faEdit} />
+                      </button>
+                      <button type="button" onClick={() => handleDelete(payable)} style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Delete">
+                        <FontAwesomeIcon icon={faTrash} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -535,9 +638,128 @@ const AccountsPayable = () => {
         </div>
       )}
 
-      {/* Toast */}
+      {/* Edit Modal */}
+      {showEditModal && selectedPayableForEdit && (
+        <div className="modal-overlay" onClick={() => !editLoading && setShowEditModal(false)} role="dialog" aria-modal="true">
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Accounts Payable</h3>
+              <button type="button" className="modal-close-btn" onClick={() => !editLoading && setShowEditModal(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleEditSubmit} className="modal-form">
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea value={editForm.description} onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))} className="form-control" rows={3} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Due Date</label>
+                  <input type="date" value={editForm.due_date} onChange={(e) => setEditForm(prev => ({ ...prev, due_date: e.target.value }))} className="form-control" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Reference Number</label>
+                  <input type="text" value={editForm.reference_number} onChange={(e) => setEditForm(prev => ({ ...prev, reference_number: e.target.value }))} className="form-control" />
+                </div>
+                <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px', marginTop: '16px' }}>
+                  <button type="button" className="modal-btn modal-btn-cancel" onClick={() => setShowEditModal(false)} disabled={editLoading}>Cancel</button>
+                  <button type="submit" className="modal-btn modal-btn-confirm" disabled={editLoading}>{editLoading ? 'Saving...' : 'Save'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {showDeleteModal && selectedPayableForDelete && (
+        <div className="modal-overlay" onClick={() => !deleteLoading && setShowDeleteModal(false)} role="dialog" aria-modal="true">
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Delete Accounts Payable</h3>
+              <button type="button" className="modal-close-btn" onClick={() => !deleteLoading && setShowDeleteModal(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="report-subtitle" style={{ marginBottom: 0 }}>
+                Are you sure you want to delete this accounts payable? {selectedPayableForDelete.reference_number && <strong>{selectedPayableForDelete.reference_number}</strong>} This action cannot be undone.
+                {selectedPayableForDelete.paid_amount > 0 && (
+                  <span style={{ display: 'block', marginTop: '8px', color: '#dc2626', fontSize: '0.75rem' }}>
+                    Note: Cannot delete if payments have been made. Reverse payments first.
+                  </span>
+                )}
+              </p>
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px', marginTop: '16px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" className="modal-btn modal-btn-cancel" onClick={() => setShowDeleteModal(false)} disabled={deleteLoading}>Cancel</button>
+                <button type="button" className="modal-btn modal-btn-confirm" onClick={handleConfirmDelete} disabled={deleteLoading} style={{ background: '#dc2626' }}>{deleteLoading ? 'Deleting...' : 'Delete'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reverse Payment Modal */}
+      {showReversePaymentModal && selectedPayableForView && (
+        <div className="modal-overlay" onClick={() => !reverseLoading && setShowReversePaymentModal(false)} role="dialog" aria-modal="true">
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reverse Payment</h3>
+              <button type="button" className="modal-close-btn" onClick={() => !reverseLoading && setShowReversePaymentModal(false)} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+            <div className="modal-body" style={{ overflow: 'auto' }}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Select a payment to reverse. This will undo the payment and restore the outstanding balance.
+              </p>
+              {transactionsLoading ? (
+                <div className="loading-spinner" style={{ margin: '24px auto' }} />
+              ) : transactions.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No payments found to reverse.</p>
+              ) : (
+                <table className="ecl-table" style={{ fontSize: '0.75rem', width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '6px 10px' }}>DATE</th>
+                      <th style={{ padding: '6px 10px' }}>AMOUNT</th>
+                      <th style={{ padding: '6px 10px' }}>METHOD</th>
+                      <th style={{ padding: '6px 10px' }}>DESCRIPTION</th>
+                      <th style={{ padding: '6px 10px' }}>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((t) => (
+                      <tr key={t.id} style={{ backgroundColor: '#fafafa' }}>
+                        <td style={{ padding: '6px 10px' }}>{new Date(t.payment_date).toLocaleDateString()}</td>
+                        <td style={{ padding: '6px 10px' }}>{formatCurrency(t.amount_paid, selectedPayableForView.currency_code)}</td>
+                        <td style={{ padding: '6px 10px' }}>{t.payment_method}</td>
+                        <td style={{ padding: '6px 10px' }}>{t.description || '—'}</td>
+                        <td style={{ padding: '6px 10px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmReversePayment(t.id)}
+                            disabled={reverseLoading}
+                            style={{ color: '#f59e0b', background: 'none', border: 'none', cursor: reverseLoading ? 'not-allowed' : 'pointer', padding: 0 }}
+                            title="Reverse this payment"
+                          >
+                            <FontAwesomeIcon icon={faUndo} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast - top right */}
       {toast.visible && toast.message && (
-        <div className="success-toast">
+        <div className="success-toast" style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 2000 }}>
           <div className="success-toast-content" style={{ background: getToastBg(toast.type) }}>
             {getToastIcon(toast.type)}
             <span>{toast.message}</span>

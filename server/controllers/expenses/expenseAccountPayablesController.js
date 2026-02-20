@@ -39,6 +39,8 @@ class ExpenseAccountPayablesController {
       const off = Number(offset);
       const [payables] = await pool.query(
         `SELECT apb.*, 
+                COALESCE(apb.paid_amount, 0) as paid_amount,
+                COALESCE(apb.outstanding_balance, 0) as outstanding_balance,
                 COALESCE(apb.description, e.description) as description,
                 e.expense_date, 
                 s.name as supplier_name, 
@@ -79,7 +81,10 @@ class ExpenseAccountPayablesController {
     try {
       const { id } = req.params;
       const [payables] = await pool.execute(
-        `SELECT apb.*, e.description as expense_description, e.expense_date, e.amount as original_expense_amount,
+        `SELECT apb.*, 
+                COALESCE(apb.paid_amount, 0) as paid_amount,
+                COALESCE(apb.outstanding_balance, 0) as outstanding_balance,
+                e.description as expense_description, e.expense_date, e.amount as original_expense_amount,
                 s.name as supplier_name, c.code as currency_code,
                 CASE 
                   WHEN apb.supplier_id IS NULL THEN 'Non-Supplier'
@@ -130,12 +135,35 @@ class ExpenseAccountPayablesController {
 
       await conn.beginTransaction();
 
-      // 1. Create journal entry for the opening balance
+      // 1. Resolve journal_id (General Journal or any active journal; create if none)
+      let journal_id = null;
+      const [journalByName] = await conn.execute(
+        "SELECT id FROM journals WHERE name IN ('General Journal', 'Purchases Journal') AND is_active = 1 LIMIT 1"
+      );
+      if (journalByName.length > 0) {
+        journal_id = journalByName[0].id;
+      } else {
+        const [anyJournal] = await conn.execute('SELECT id FROM journals WHERE is_active = 1 LIMIT 1');
+        if (anyJournal.length > 0) {
+          journal_id = anyJournal[0].id;
+        } else {
+          const [journalResult] = await conn.execute(
+            "INSERT INTO journals (name, description, is_active) VALUES ('General Journal', 'General ledger entries', 1)"
+          );
+          journal_id = journalResult.insertId;
+        }
+      }
+      if (!journal_id) {
+        await conn.rollback();
+        return res.status(500).json({ success: false, message: 'No journal found. Please set up journals in accounting.' });
+      }
+
+      // 2. Create journal entry for the opening balance
       const [journalResult] = await conn.execute(
         `INSERT INTO journal_entries (journal_id, entry_date, description, reference, created_by) 
          VALUES (?, ?, ?, ?, ?)`,
         [
-          6, // General Journal
+          journal_id,
           opening_balance_date || new Date(),
           `Opening Balance: ${description}`,
           reference_number || `OB-${Date.now()}`,
@@ -144,7 +172,7 @@ class ExpenseAccountPayablesController {
       );
       const journalEntryId = journalResult.insertId;
 
-      // 2. Get account IDs
+      // 3. Get account IDs
       // Use Retained Earnings for opening balances, NOT expense accounts
       const [[retainedEarnings]] = await conn.execute(
         `SELECT id FROM chart_of_accounts WHERE code = '3998' LIMIT 1` // Retained Earnings
@@ -158,7 +186,7 @@ class ExpenseAccountPayablesController {
         throw new Error('Required accounts not found in chart of accounts (3998 - Retained Earnings or 2000 - Accounts Payable)');
       }
 
-      // 3. Create journal entry lines (double-entry)
+      // 4. Create journal entry lines (double-entry)
       // DEBIT: Retained Earnings (opening balance equity)
       // This records the historical liability without affecting current period expenses
       await conn.execute(
@@ -174,29 +202,36 @@ class ExpenseAccountPayablesController {
         [journalEntryId, payableAccount.id, amount, currency_id, `Opening Balance - ${description}`]
       );
 
-      // 4. Create accounts payable balance record
+      // 5. Create accounts payable balance record
+      const openingDate = opening_balance_date
+        ? (typeof opening_balance_date === 'string' ? opening_balance_date : new Date(opening_balance_date).toISOString().split('T')[0])
+        : new Date().toISOString().split('T')[0];
+      const dueDateVal = due_date
+        ? (typeof due_date === 'string' ? due_date : new Date(due_date).toISOString().split('T')[0])
+        : null;
+
       const [payableResult] = await conn.execute(
         `INSERT INTO accounts_payable_balances 
-         (supplier_id, currency_id, original_expense_id, original_amount, outstanding_balance, 
+         (supplier_id, currency_id, original_expense_id, original_amount, paid_amount, outstanding_balance, 
           due_date, status, reference_number, description, is_opening_balance, opening_balance_date) 
-         VALUES (?, ?, NULL, ?, ?, ?, 'outstanding', ?, ?, TRUE, ?)`,
+         VALUES (?, ?, NULL, ?, 0, ?, ?, 'outstanding', ?, ?, TRUE, ?)`,
         [
           supplier_id || null,
           currency_id,
-          amount,
-          amount,
-          due_date || null,
+          parseFloat(amount),
+          parseFloat(amount),
+          dueDateVal,
           reference_number || `OB-${Date.now()}`,
-          description,
-          opening_balance_date || new Date()
+          description || '',
+          openingDate
         ]
       );
 
-      // 5. Update account balances
+      // 6. Update account balances
       const AccountBalanceService = require('../../services/accountBalanceService');
       await AccountBalanceService.updateAccountBalancesFromJournalEntry(conn, journalEntryId, currency_id);
 
-      // 6. Log audit event
+      // 7. Log audit event
       await AuditLogger.log({
         action: 'OPENING_BALANCE_PAYABLE_CREATED',
         table: 'accounts_payable_balances',
@@ -304,17 +339,34 @@ class ExpenseAccountPayablesController {
         });
       }
       
-      // 2. Create journal entry
+      // 2. Resolve journal (by name, then any active, then create if none)
       const journalDesc = description || `Payment for ${payable.original_expense_id}`;
       let journalName;
       if (payment_method === 'cash') journalName = 'Cash Payments Journal';
       else if (payment_method === 'bank') journalName = 'Bank Payments Journal';
       else journalName = 'General Journal';
-      
-      const [[journalRow]] = await conn.execute(`SELECT id FROM journals WHERE name = ? LIMIT 1`, [journalName]);
-      const journal_id = journalRow ? journalRow.id : null;
-      if (!journal_id) throw new Error('No journal found for ' + journalName);
-      
+
+      let journal_id = null;
+      const [journalByName] = await conn.execute('SELECT id FROM journals WHERE name = ? AND is_active = 1 LIMIT 1', [journalName]);
+      if (journalByName.length > 0) {
+        journal_id = journalByName[0].id;
+      } else {
+        const [anyJournal] = await conn.execute('SELECT id FROM journals WHERE is_active = 1 LIMIT 1');
+        if (anyJournal.length > 0) {
+          journal_id = anyJournal[0].id;
+        } else {
+          const [journalInsert] = await conn.execute(
+            'INSERT INTO journals (name, description, is_active) VALUES (?, ?, 1)',
+            [journalName, journalName === 'General Journal' ? 'General ledger entries' : `${journalName} entries`]
+          );
+          journal_id = journalInsert.insertId;
+        }
+      }
+      if (!journal_id) {
+        await conn.rollback();
+        return res.status(500).json({ success: false, message: 'No journal found. Please set up journals in accounting.' });
+      }
+
       const [journalResult] = await conn.execute(
         `INSERT INTO journal_entries (journal_id, entry_date, reference, description) VALUES (?, ?, ?, ?)`,
         [journal_id, payment_date, 'payments', journalDesc]
@@ -366,10 +418,22 @@ class ExpenseAccountPayablesController {
       );
       
       // 6. Update accounts payable balance
-      const newPaidAmount = payable.paid_amount + amount;
-      const newOutstandingBalance = payable.outstanding_balance - amount;
+      const currentPaidAmount = parseFloat(payable.paid_amount) || 0;
+      const currentOutstanding = parseFloat(payable.outstanding_balance) || 0;
+      const originalAmount = parseFloat(payable.original_amount) || currentPaidAmount + currentOutstanding;
+      
+      let newOutstandingBalance = Math.max(0, currentOutstanding - amount);
+      let newPaidAmount = originalAmount - newOutstandingBalance;
+      
+      // Ensure paid_amount doesn't exceed original_amount
+      newPaidAmount = Math.min(newPaidAmount, originalAmount);
+      
       let newStatus = 'partial';
-      if (newOutstandingBalance <= 0) newStatus = 'paid';
+      if (newOutstandingBalance <= 0.01) { // Allow small rounding differences
+        newStatus = 'paid';
+        newOutstandingBalance = 0;
+        newPaidAmount = originalAmount;
+      }
       
       await conn.execute(
         `UPDATE accounts_payable_balances 
@@ -444,6 +508,215 @@ class ExpenseAccountPayablesController {
     } catch (error) {
       console.error('Error fetching payment history:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch payment history' });
+    }
+  }
+
+  // Reverse a payment (delete payment and reverse journal entries)
+  async reversePayment(req, res) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const { payable_id, payment_id } = req.params;
+
+      // Get payment details
+      const [payments] = await conn.execute(
+        `SELECT app.*, t.journal_entry_id, t.transaction_date, t.amount, t.currency_id
+         FROM accounts_payable_payments app
+         LEFT JOIN transactions t ON app.transaction_id = t.id
+         WHERE app.id = ? AND app.original_expense_id = (
+           SELECT original_expense_id FROM accounts_payable_balances WHERE id = ?
+         )`,
+        [payment_id, payable_id]
+      );
+
+      if (payments.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ success: false, message: 'Payment not found' });
+      }
+
+      const payment = payments[0];
+      const amount = parseFloat(payment.amount_paid || payment.amount || 0);
+      const journalEntryId = payment.journal_entry_id;
+
+      // Get current payable balance
+      const [[payable]] = await conn.execute(
+        'SELECT * FROM accounts_payable_balances WHERE id = ?',
+        [payable_id]
+      );
+
+      if (!payable) {
+        await conn.rollback();
+        return res.status(404).json({ success: false, message: 'Accounts payable not found' });
+      }
+
+      // Reverse account balances from journal entry
+      const AccountBalanceService = require('../../services/accountBalanceService');
+      await AccountBalanceService.reverseAccountBalancesFromJournalEntry(conn, journalEntryId, payment.currency_id);
+
+      // Delete journal entry lines
+      await conn.execute('DELETE FROM journal_entry_lines WHERE journal_entry_id = ?', [journalEntryId]);
+      // Delete journal entry
+      await conn.execute('DELETE FROM journal_entries WHERE id = ?', [journalEntryId]);
+      // Delete transaction
+      await conn.execute('DELETE FROM transactions WHERE id = ?', [payment.transaction_id]);
+      // Delete payment record
+      await conn.execute('DELETE FROM accounts_payable_payments WHERE id = ?', [payment_id]);
+
+      // Update accounts payable balance
+      const currentPaidAmount = parseFloat(payable.paid_amount) || 0;
+      const currentOutstanding = parseFloat(payable.outstanding_balance) || 0;
+      const originalAmount = parseFloat(payable.original_amount) || currentPaidAmount + currentOutstanding;
+
+      const newPaidAmount = Math.max(0, currentPaidAmount - amount);
+      const newOutstandingBalance = originalAmount - newPaidAmount;
+      let newStatus = 'partial';
+      if (newOutstandingBalance >= originalAmount - 0.01) {
+        newStatus = 'outstanding';
+      } else if (newOutstandingBalance <= 0.01) {
+        newStatus = 'paid';
+      }
+
+      await conn.execute(
+        `UPDATE accounts_payable_balances 
+         SET paid_amount = ?, outstanding_balance = ?, status = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [newPaidAmount, newOutstandingBalance, newStatus, payable_id]
+      );
+
+      await conn.commit();
+
+      // Log audit event
+      await AuditLogger.log({
+        action: 'ACCOUNTS_PAYABLE_PAYMENT_REVERSED',
+        table: 'accounts_payable_payments',
+        record_id: payment_id,
+        user_id: req.user.id,
+        details: {
+          payable_id: payable_id,
+          payment_id: payment_id,
+          reversed_amount: amount,
+          new_balance: newOutstandingBalance,
+          new_status: newStatus
+        },
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent')
+      });
+
+      res.json({ success: true, message: 'Payment reversed successfully' });
+    } catch (error) {
+      await conn.rollback();
+      console.error('Error reversing payment:', error);
+      res.status(500).json({ success: false, message: 'Failed to reverse payment', error: error.message });
+    } finally {
+      conn.release();
+    }
+  }
+
+  // Update accounts payable
+  async updateAccountsPayable(req, res) {
+    const conn = await pool.getConnection();
+    try {
+      const { id } = req.params;
+      const { description, due_date, reference_number } = req.body;
+
+      const [result] = await conn.execute(
+        `UPDATE accounts_payable_balances 
+         SET description = ?, due_date = ?, reference_number = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [description || null, due_date || null, reference_number || null, id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Accounts payable not found' });
+      }
+
+      // Log audit event
+      await AuditLogger.log({
+        action: 'ACCOUNTS_PAYABLE_UPDATED',
+        table: 'accounts_payable_balances',
+        record_id: id,
+        user_id: req.user.id,
+        details: { description, due_date, reference_number },
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent')
+      });
+
+      res.json({ success: true, message: 'Accounts payable updated successfully' });
+    } catch (error) {
+      console.error('Error updating accounts payable:', error);
+      res.status(500).json({ success: false, message: 'Failed to update accounts payable', error: error.message });
+    } finally {
+      conn.release();
+    }
+  }
+
+  // Delete accounts payable (only if no payments made)
+  async deleteAccountsPayable(req, res) {
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const { id } = req.params;
+
+      // Check if payable exists and has payments
+      const [[payable]] = await conn.execute(
+        'SELECT * FROM accounts_payable_balances WHERE id = ?',
+        [id]
+      );
+
+      if (!payable) {
+        await conn.rollback();
+        return res.status(404).json({ success: false, message: 'Accounts payable not found' });
+      }
+
+      // Check if there are any payments
+      const [payments] = await conn.execute(
+        'SELECT COUNT(*) as count FROM accounts_payable_payments WHERE original_expense_id = ?',
+        [payable.original_expense_id]
+      );
+
+      if (payments[0].count > 0) {
+        await conn.rollback();
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Cannot delete accounts payable with payment history. Reverse payments first.' 
+        });
+      }
+
+      // If it's an opening balance, reverse the journal entry
+      if (payable.is_opening_balance && payable.opening_balance_journal_id) {
+        const AccountBalanceService = require('../../services/accountBalanceService');
+        await AccountBalanceService.reverseAccountBalancesFromJournalEntry(
+          conn, 
+          payable.opening_balance_journal_id, 
+          payable.currency_id
+        );
+        await conn.execute('DELETE FROM journal_entry_lines WHERE journal_entry_id = ?', [payable.opening_balance_journal_id]);
+        await conn.execute('DELETE FROM journal_entries WHERE id = ?', [payable.opening_balance_journal_id]);
+      }
+
+      // Delete the payable record
+      await conn.execute('DELETE FROM accounts_payable_balances WHERE id = ?', [id]);
+
+      await conn.commit();
+
+      // Log audit event
+      await AuditLogger.log({
+        action: 'ACCOUNTS_PAYABLE_DELETED',
+        table: 'accounts_payable_balances',
+        record_id: id,
+        user_id: req.user.id,
+        details: { payable },
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent')
+      });
+
+      res.json({ success: true, message: 'Accounts payable deleted successfully' });
+    } catch (error) {
+      await conn.rollback();
+      console.error('Error deleting accounts payable:', error);
+      res.status(500).json({ success: false, message: 'Failed to delete accounts payable', error: error.message });
+    } finally {
+      conn.release();
     }
   }
 

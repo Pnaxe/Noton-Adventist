@@ -11,15 +11,22 @@ class PayslipController {
         employee_id,
         pay_period,
         pay_date,
-        currency,
+        currency: currencyBody,
         payment_method,
-        bank_account_id,
+        bank_account_id: bankAccountIdRaw,
         earnings,
-        deductions,
+        deductions: deductionsRaw,
         notes
       } = req.body;
 
-      const created_by = req.user.id;
+      const created_by = req.user?.id ?? null;
+      const currency = currencyBody || 'USD';
+      const deductions = Array.isArray(deductionsRaw) ? deductionsRaw : [];
+      // Use null for bank_account_id when empty string or when not bank transfer (avoids FK violation)
+      const bank_account_id =
+        payment_method === 'bank' && bankAccountIdRaw != null && bankAccountIdRaw !== ''
+          ? (typeof bankAccountIdRaw === 'number' ? bankAccountIdRaw : parseInt(bankAccountIdRaw, 10))
+          : null;
 
       // Validate required fields
       if (!employee_id || !pay_period || !pay_date || !payment_method || !earnings || earnings.length === 0) {
@@ -30,7 +37,7 @@ class PayslipController {
       }
 
       // Validate bank account for bank transfers
-      if (payment_method === 'bank' && !bank_account_id) {
+      if (payment_method === 'bank' && (bank_account_id == null || isNaN(bank_account_id))) {
         return res.status(400).json({
           success: false,
           message: 'Bank account is required for bank transfer payments'
@@ -39,16 +46,24 @@ class PayslipController {
 
       // Calculate totals
       const totalEarnings = earnings
-        .filter(e => e.label && e.amount)
-        .reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+        .filter(e => e && (e.label || e.label === 0) && (e.amount != null && e.amount !== ''))
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
 
       const totalDeductions = deductions
-        .filter(d => d.label && d.amount)
-        .reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
+        .filter(d => d && (d.label || d.label === 0) && (d.amount != null && d.amount !== ''))
+        .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
 
       const netPay = totalEarnings - totalDeductions;
 
-      // Insert payslip
+      const employeeIdInt = parseInt(employee_id, 10);
+      if (isNaN(employeeIdInt)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid employee ID'
+        });
+      }
+
+      // Insert payslip (use null for created_by if not set)
       const [payslipResult] = await connection.execute(
         `INSERT INTO payslips (
           employee_id, pay_period, pay_date, currency, 
@@ -56,7 +71,7 @@ class PayslipController {
           total_earnings, total_deductions, net_pay, 
           notes, created_by
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [employee_id, pay_period, pay_date, currency, payment_method, bank_account_id, totalEarnings, totalDeductions, netPay, notes, created_by]
+        [employeeIdInt, pay_period, pay_date, currency, payment_method, bank_account_id, totalEarnings, totalDeductions, netPay, notes || null, created_by]
       );
 
       const payslipId = payslipResult.insertId;
@@ -119,9 +134,10 @@ class PayslipController {
     } catch (error) {
       await connection.rollback();
       console.error('Error creating payslip:', error);
+      const message = error.message || 'Failed to create payslip';
       res.status(500).json({
         success: false,
-        message: 'Failed to create payslip',
+        message: process.env.NODE_ENV === 'production' ? 'Failed to create payslip' : message,
         error: error.message
       });
     } finally {
@@ -220,7 +236,7 @@ class PayslipController {
       const { id } = req.params;
 
       const [payslip] = await pool.execute(
-        `SELECT p.*, e.full_name as employee_name, e.employee_id, d.name as department_name, jt.title as job_title
+        `SELECT p.*, e.full_name as employee_name, e.employee_id as employee_code, d.name as department_name, jt.title as job_title
          FROM payslips p
          JOIN employees e ON p.employee_id = e.id
          LEFT JOIN departments d ON e.department_id = d.id
@@ -306,6 +322,141 @@ class PayslipController {
       res.status(500).json({
         success: false,
         message: 'Failed to update payslip status',
+        error: error.message
+      });
+    } finally {
+      connection.release();
+    }
+  }
+
+  // Update full payslip (only when status is pending)
+  static async updatePayslip(req, res) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      const { id } = req.params;
+      const {
+        employee_id,
+        pay_period,
+        pay_date,
+        currency: currencyBody,
+        payment_method,
+        bank_account_id: bankAccountIdRaw,
+        earnings,
+        deductions: deductionsRaw,
+        notes,
+        status
+      } = req.body;
+
+      const currency = currencyBody || 'USD';
+      const deductions = Array.isArray(deductionsRaw) ? deductionsRaw : [];
+      const bank_account_id =
+        payment_method === 'bank' && bankAccountIdRaw != null && bankAccountIdRaw !== ''
+          ? (typeof bankAccountIdRaw === 'number' ? bankAccountIdRaw : parseInt(bankAccountIdRaw, 10))
+          : null;
+
+      const [existing] = await connection.execute(
+        'SELECT id, status FROM payslips WHERE id = ?',
+        [id]
+      );
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, message: 'Payslip not found' });
+      }
+      if (existing[0].status === 'processed') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot edit payslip after it has been processed'
+        });
+      }
+
+      if (!employee_id || !pay_period || !pay_date || !payment_method || !earnings || earnings.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Employee ID, pay period, pay date, payment method, and at least one earning are required'
+        });
+      }
+      if (payment_method === 'bank' && (bank_account_id == null || isNaN(bank_account_id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bank account is required for bank transfer payments'
+        });
+      }
+
+      const totalEarnings = earnings
+        .filter(e => e && (e.label || e.label === 0) && (e.amount != null && e.amount !== ''))
+        .reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+      const totalDeductions = deductions
+        .filter(d => d && (d.label || d.label === 0) && (d.amount != null && d.amount !== ''))
+        .reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+      const netPay = totalEarnings - totalDeductions;
+
+      const employeeIdInt = parseInt(employee_id, 10);
+      if (isNaN(employeeIdInt)) {
+        return res.status(400).json({ success: false, message: 'Invalid employee ID' });
+      }
+
+      const newStatus = status && ['pending', 'processed', 'cancelled'].includes(status) ? status : existing[0].status;
+
+      await connection.execute(
+        `UPDATE payslips SET
+          employee_id = ?, pay_period = ?, pay_date = ?, currency = ?,
+          payment_method = ?, bank_account_id = ?,
+          total_earnings = ?, total_deductions = ?, net_pay = ?,
+          notes = ?, status = ?
+        WHERE id = ?`,
+        [employeeIdInt, pay_period, pay_date, currency, payment_method, bank_account_id, totalEarnings, totalDeductions, netPay, notes || null, newStatus, id]
+      );
+
+      await connection.execute('DELETE FROM payslip_earnings WHERE payslip_id = ?', [id]);
+      await connection.execute('DELETE FROM payslip_deductions WHERE payslip_id = ?', [id]);
+
+      for (const earning of earnings) {
+        if (earning.label && earning.amount) {
+          await connection.execute(
+            `INSERT INTO payslip_earnings (payslip_id, label, amount, currency) VALUES (?, ?, ?, ?)`,
+            [id, earning.label, earning.amount, earning.currency || currency]
+          );
+        }
+      }
+      for (const deduction of deductions) {
+        if (deduction.label && deduction.amount) {
+          await connection.execute(
+            `INSERT INTO payslip_deductions (payslip_id, label, amount, currency) VALUES (?, ?, ?, ?)`,
+            [id, deduction.label, deduction.amount, deduction.currency || currency]
+          );
+        }
+      }
+
+      await connection.commit();
+
+      const [payslip] = await connection.execute(
+        `SELECT p.*, e.full_name as employee_name, e.employee_id, d.name as department_name, jt.title as job_title
+         FROM payslips p
+         JOIN employees e ON p.employee_id = e.id
+         LEFT JOIN departments d ON e.department_id = d.id
+         LEFT JOIN job_titles jt ON e.job_title_id = jt.id
+         WHERE p.id = ?`,
+        [id]
+      );
+      const [earningsData] = await connection.execute('SELECT * FROM payslip_earnings WHERE payslip_id = ?', [id]);
+      const [deductionsData] = await connection.execute('SELECT * FROM payslip_deductions WHERE payslip_id = ?', [id]);
+
+      res.json({
+        success: true,
+        message: 'Payslip updated successfully',
+        data: {
+          ...payslip[0],
+          earnings: earningsData,
+          deductions: deductionsData
+        }
+      });
+    } catch (error) {
+      await connection.rollback();
+      console.error('Error updating payslip:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update payslip',
         error: error.message
       });
     } finally {

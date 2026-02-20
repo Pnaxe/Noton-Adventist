@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS payslips (
     employee_id INT NOT NULL,
     pay_period VARCHAR(7) NOT NULL, -- YYYY-MM format
     pay_date DATE NOT NULL,
-    currency VARCHAR(3) DEFAULT 'KES',
+    currency VARCHAR(3) DEFAULT 'USD',
     payment_method ENUM('bank', 'cash') DEFAULT 'bank',
     bank_account_id INT,
     total_earnings DECIMAL(15,2) DEFAULT 0,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS payslip_earnings (
     payslip_id INT NOT NULL,
     label VARCHAR(255) NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'KES',
+    currency VARCHAR(3) DEFAULT 'USD',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (payslip_id) REFERENCES payslips(id) ON DELETE CASCADE,
     INDEX idx_payslip_id (payslip_id)
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS payslip_deductions (
     payslip_id INT NOT NULL,
     label VARCHAR(255) NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'KES',
+    currency VARCHAR(3) DEFAULT 'USD',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (payslip_id) REFERENCES payslips(id) ON DELETE CASCADE,
     INDEX idx_payslip_id (payslip_id)
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS payroll_run_details (
     payroll_run_id INT NOT NULL,
     payslip_id INT NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'KES',
+    currency VARCHAR(3) DEFAULT 'USD',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs(id) ON DELETE CASCADE,
     FOREIGN KEY (payslip_id) REFERENCES payslips(id) ON DELETE CASCADE,

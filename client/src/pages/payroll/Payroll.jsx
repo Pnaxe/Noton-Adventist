@@ -9,6 +9,7 @@ import {
   faPrint,
   faPlus,
   faEye,
+  faEdit,
   faCheck,
   faTimes,
   faMoneyBillWave,
@@ -38,8 +39,6 @@ const Payroll = () => {
   
   const [recentPayrolls, setRecentPayrolls] = useState([]);
   const [showRunPayrollModal, setShowRunPayrollModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [successData, setSuccessData] = useState(null);
   const [showCreatePayslipModal, setShowCreatePayslipModal] = useState(false);
   const [createPayslipLoading, setCreatePayslipLoading] = useState(false);
   const [createPayslipError, setCreatePayslipError] = useState(null);
@@ -50,7 +49,7 @@ const Payroll = () => {
   const [newBankAccount, setNewBankAccount] = useState({
     bank_name: '',
     account_number: '',
-    currency: 'KES'
+    currency: 'USD'
   });
   
   // Create payslip form
@@ -58,7 +57,7 @@ const Payroll = () => {
     employee_id: '',
     pay_period: new Date().toISOString().slice(0, 7),
     pay_date: new Date().toISOString().split('T')[0],
-    currency: 'KES',
+    currency: 'USD',
     payment_method: 'bank',
     bank_account_id: '',
     notes: ''
@@ -66,11 +65,11 @@ const Payroll = () => {
 
   // Dynamic earnings and deductions
   const [earnings, setEarnings] = useState([
-    { id: 1, label: 'Basic Salary', amount: '', currency: 'KES' }
+    { id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }
   ]);
   
   const [deductions, setDeductions] = useState([
-    { id: 1, label: 'PAYE Tax', amount: '', currency: 'KES' }
+    { id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }
   ]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeSearchTerm, setActiveSearchTerm] = useState('');
@@ -89,6 +88,7 @@ const Payroll = () => {
     reference: '',
     notes: ''
   });
+  const [runPayrollError, setRunPayrollError] = useState(null);
 
   // Generate auto reference
   const generateReference = () => {
@@ -103,6 +103,35 @@ const Payroll = () => {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [payslips, setPayslips] = useState([]);
   const [currencies, setCurrencies] = useState([]);
+
+  // View payslip modal
+  const [showViewPayslipModal, setShowViewPayslipModal] = useState(false);
+  const [viewPayslipLoading, setViewPayslipLoading] = useState(false);
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
+
+  // Edit payslip modal (full form)
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [payslipToEdit, setPayslipToEdit] = useState(null);
+  const [editFormLoading, setEditFormLoading] = useState(false);
+  const [editFormError, setEditFormError] = useState(null);
+  const [editForm, setEditForm] = useState({
+    employee_id: '',
+    pay_period: '',
+    pay_date: '',
+    currency: 'USD',
+    payment_method: 'bank',
+    bank_account_id: '',
+    notes: '',
+    status: 'pending'
+  });
+  const [editEarnings, setEditEarnings] = useState([{ id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }]);
+  const [editDeductions, setEditDeductions] = useState([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }]);
+  const [editSelectedEmployeeBankAccounts, setEditSelectedEmployeeBankAccounts] = useState([]);
+
+  // Delete confirmation modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [payslipToDelete, setPayslipToDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -237,7 +266,7 @@ const Payroll = () => {
         setNewBankAccount({
           bank_name: '',
           account_number: '',
-          currency: 'KES'
+          currency: 'USD'
         });
         setShowAddBankAccount(false);
         showToast('Bank account added successfully', 'success');
@@ -340,19 +369,19 @@ const Payroll = () => {
           employee_id: '',
           pay_period: new Date().toISOString().slice(0, 7),
           pay_date: new Date().toISOString().split('T')[0],
-          currency: 'KES',
+          currency: 'USD',
           payment_method: 'bank',
           bank_account_id: '',
           notes: ''
         });
-        setEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'KES' }]);
-        setDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'KES' }]);
+        setEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }]);
+        setDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }]);
         setSelectedEmployeeBankAccounts([]);
         setShowAddBankAccount(false);
         setNewBankAccount({
           bank_name: '',
           account_number: '',
-          currency: 'KES'
+          currency: 'USD'
         });
       } else {
         const errorMsg = response.data.message || 'Failed to create payslip';
@@ -361,7 +390,7 @@ const Payroll = () => {
       }
     } catch (err) {
       console.error('Error creating payslip:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to create payslip';
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to create payslip';
       setCreatePayslipError(errorMsg);
       showToast(errorMsg, 'error');
     } finally {
@@ -376,15 +405,207 @@ const Payroll = () => {
       employee_id: '',
       pay_period: new Date().toISOString().slice(0, 7),
       pay_date: new Date().toISOString().split('T')[0],
-      currency: 'KES',
+      currency: 'USD',
       payment_method: 'bank',
       bank_account_id: '',
       notes: ''
     });
-    setEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'KES' }]);
-    setDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'KES' }]);
+    setEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }]);
+    setDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }]);
     setSelectedEmployeeBankAccounts([]);
     setShowAddBankAccount(false);
+  };
+
+  const handleViewPayslip = async (payslip) => {
+    setShowViewPayslipModal(true);
+    setSelectedPayslip(null);
+    setViewPayslipLoading(true);
+    try {
+      const response = await axios.get(`${BASE_URL}/payroll/payslips/${payslip.id}`, { headers: authHeaders });
+      if (response.data.success) {
+        setSelectedPayslip(response.data.data);
+      } else {
+        showToast('Failed to load payslip details', 'error');
+        setShowViewPayslipModal(false);
+      }
+    } catch (err) {
+      console.error('Error loading payslip:', err);
+      showToast(err.response?.data?.message || 'Failed to load payslip details', 'error');
+      setShowViewPayslipModal(false);
+    } finally {
+      setViewPayslipLoading(false);
+    }
+  };
+
+  const handleCloseViewPayslipModal = () => {
+    setShowViewPayslipModal(false);
+    setSelectedPayslip(null);
+  };
+
+  const handleEditPayslipClick = async (payslip) => {
+    setPayslipToEdit(payslip);
+    setShowEditModal(true);
+    setEditFormError(null);
+    setEditFormLoading(true);
+    try {
+      const response = await axios.get(`${BASE_URL}/payroll/payslips/${payslip.id}`, { headers: authHeaders });
+      if (!response.data.success) {
+        showToast('Failed to load payslip for editing', 'error');
+        setShowEditModal(false);
+        return;
+      }
+      const data = response.data.data;
+      setEditForm({
+        employee_id: String(data.employee_id),
+        pay_period: data.pay_period || '',
+        pay_date: (data.pay_date || '').toString().slice(0, 10),
+        currency: data.currency || 'USD',
+        payment_method: data.payment_method || 'bank',
+        bank_account_id: data.bank_account_id ? String(data.bank_account_id) : '',
+        notes: data.notes || '',
+        status: data.status || 'pending'
+      });
+      setEditEarnings(
+        (data.earnings && data.earnings.length > 0)
+          ? data.earnings.map((e, i) => ({ id: i + 1, label: e.label || '', amount: e.amount != null ? String(e.amount) : '', currency: e.currency || data.currency || 'USD' }))
+          : [{ id: 1, label: 'Basic Salary', amount: '', currency: data.currency || 'USD' }]
+      );
+      setEditDeductions(
+        (data.deductions && data.deductions.length > 0)
+          ? data.deductions.map((d, i) => ({ id: i + 1, label: d.label || '', amount: d.amount != null ? String(d.amount) : '', currency: d.currency || data.currency || 'USD' }))
+          : [{ id: 1, label: 'PAYE Tax', amount: '', currency: data.currency || 'USD' }]
+      );
+      if (data.employee_id) {
+        const bankRes = await axios.get(`${BASE_URL}/employees/${data.employee_id}/bank-accounts`, { headers: authHeaders });
+        setEditSelectedEmployeeBankAccounts(bankRes.data?.data?.bankAccounts || []);
+      } else {
+        setEditSelectedEmployeeBankAccounts([]);
+      }
+    } catch (err) {
+      console.error('Error loading payslip for edit:', err);
+      showToast(err.response?.data?.message || 'Failed to load payslip', 'error');
+      setShowEditModal(false);
+    } finally {
+      setEditFormLoading(false);
+    }
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setPayslipToEdit(null);
+    setEditFormError(null);
+    setEditForm({
+      employee_id: '',
+      pay_period: '',
+      pay_date: '',
+      currency: 'USD',
+      payment_method: 'bank',
+      bank_account_id: '',
+      notes: '',
+      status: 'pending'
+    });
+    setEditEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }]);
+    setEditDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }]);
+    setEditSelectedEmployeeBankAccounts([]);
+  };
+
+  const addEditEarning = () => {
+    const newId = Math.max(...editEarnings.map(e => e.id), 0) + 1;
+    setEditEarnings([...editEarnings, { id: newId, label: '', amount: '', currency: editForm.currency }]);
+  };
+  const removeEditEarning = (id) => {
+    if (editEarnings.length > 1) setEditEarnings(editEarnings.filter(e => e.id !== id));
+  };
+  const updateEditEarning = (id, field, value) => {
+    setEditEarnings(editEarnings.map(e => (e.id === id ? { ...e, [field]: value } : e)));
+  };
+  const addEditDeduction = () => {
+    const newId = Math.max(...editDeductions.map(d => d.id), 0) + 1;
+    setEditDeductions([...editDeductions, { id: newId, label: '', amount: '', currency: editForm.currency }]);
+  };
+  const removeEditDeduction = (id) => {
+    if (editDeductions.length > 1) setEditDeductions(editDeductions.filter(d => d.id !== id));
+  };
+  const updateEditDeduction = (id, field, value) => {
+    setEditDeductions(editDeductions.map(d => (d.id === id ? { ...d, [field]: value } : d)));
+  };
+  const calculateEditNetPay = () => {
+    const totalEarnings = editEarnings.filter(e => e.label && e.amount).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const totalDeductions = editDeductions.filter(d => d.label && d.amount).reduce((sum, d) => sum + (parseFloat(d.amount) || 0), 0);
+    return totalEarnings - totalDeductions;
+  };
+
+  const handleSaveEditPayslip = async () => {
+    if (!payslipToEdit) return;
+    if (!editForm.employee_id) {
+      setEditFormError('Employee is required');
+      return;
+    }
+    if (editForm.payment_method === 'bank' && !editForm.bank_account_id) {
+      setEditFormError('Bank account is required for bank transfer');
+      return;
+    }
+    const validEarnings = editEarnings.filter(e => e.label && e.amount);
+    if (validEarnings.length === 0) {
+      setEditFormError('At least one earning item is required');
+      return;
+    }
+    setEditFormLoading(true);
+    setEditFormError(null);
+    try {
+      const payload = {
+        ...editForm,
+        earnings: validEarnings.map(e => ({ label: e.label, amount: e.amount, currency: e.currency || editForm.currency })),
+        deductions: editDeductions.filter(d => d.label && d.amount).map(d => ({ label: d.label, amount: d.amount, currency: d.currency || editForm.currency }))
+      };
+      const response = await axios.put(`${BASE_URL}/payroll/payslips/${payslipToEdit.id}`, payload, { headers: authHeaders });
+      if (response.data.success) {
+        showToast('Payslip updated successfully', 'success');
+        handleCloseEditModal();
+        loadPayslips();
+        loadPayrollData();
+      } else {
+        setEditFormError(response.data.message || 'Failed to update payslip');
+        showToast(response.data.message || 'Failed to update payslip', 'error');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.response?.data?.error || 'Failed to update payslip';
+      setEditFormError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setEditFormLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (payslip) => {
+    setPayslipToDelete(payslip);
+    setShowDeleteModal(true);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false);
+    setPayslipToDelete(null);
+    setDeleteLoading(false);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!payslipToDelete) return;
+    setDeleteLoading(true);
+    try {
+      const response = await axios.delete(`${BASE_URL}/payroll/payslips/${payslipToDelete.id}`, { headers: authHeaders });
+      if (response.data.success) {
+        showToast('Payslip deleted successfully', 'success');
+        handleCloseDeleteModal();
+        loadPayslips();
+        loadPayrollData();
+      } else {
+        showToast(response.data.message || 'Failed to delete payslip', 'error');
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || err.response?.data?.error || 'Failed to delete payslip', 'error');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const loadPayslips = async () => {
@@ -435,13 +656,14 @@ const Payroll = () => {
 
   const handleRunPayroll = async () => {
     try {
-      if (!runPayrollForm.bank_account_id) {
-        setError('Please select a bank account');
+      setRunPayrollError(null);
+      const isCash = runPayrollForm.payment_method === 'Cash';
+      if (!isCash && !runPayrollForm.bank_account_id) {
+        setRunPayrollError('Please select a bank account');
         return;
       }
 
       setLoading(true);
-      setError(null);
       
       const response = await axios.post(`${BASE_URL}/payroll/runs/run`, runPayrollForm, {
         headers: authHeaders
@@ -449,20 +671,20 @@ const Payroll = () => {
       
       if (response.data.success) {
         setShowRunPayrollModal(false);
-        setSuccessData(response.data.data);
-        setShowSuccessModal(true);
+        setRunPayrollError(null);
         loadPayrollData();
         loadPayslips();
-        showToast('Payroll run completed successfully', 'success');
+        const successMsg = `Payroll run completed successfully! ${response.data.data?.payslips_processed || 0} payslips processed.`;
+        showToast(successMsg, 'success');
       } else {
         const errorMsg = response.data.message || 'Failed to run payroll';
-        setError(errorMsg);
+        setRunPayrollError(errorMsg);
         showToast(errorMsg, 'error');
       }
     } catch (err) {
       console.error('Error running payroll:', err);
-      const errorMsg = 'Failed to run payroll';
-      setError(errorMsg);
+      const errorMsg = err.response?.data?.message || err.response?.data?.error || 'Failed to run payroll';
+      setRunPayrollError(errorMsg);
       showToast(errorMsg, 'error');
     } finally {
       setLoading(false);
@@ -491,7 +713,7 @@ const Payroll = () => {
     if (currencyCode === 'USD') locale = 'en-US';
     else if (currencyCode === 'EUR') locale = 'en-EU';
     else if (currencyCode === 'GBP') locale = 'en-GB';
-    else if (currencyCode === 'KES') locale = 'en-KE';
+    else if (currencyCode === 'ZWL') locale = 'en-ZW';
     
     return new Intl.NumberFormat(locale, {
       style: 'currency',
@@ -804,11 +1026,25 @@ const Payroll = () => {
                   <td style={{ padding: '4px 10px' }}>
                     <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                       <button
-                        onClick={() => navigate(`/dashboard/payroll/payslips/${payslip.id}`)}
+                        onClick={() => handleViewPayslip(payslip)}
                         style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                         title="View"
                       >
                         <FontAwesomeIcon icon={faEye} />
+                      </button>
+                      <button
+                        onClick={() => handleEditPayslipClick(payslip)}
+                        style={{ color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title="Edit payslip"
+                      >
+                        <FontAwesomeIcon icon={faEdit} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(payslip)}
+                        style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        title="Delete"
+                      >
+                        <FontAwesomeIcon icon={faTrash} />
                       </button>
                     </div>
                   </td>
@@ -1215,17 +1451,366 @@ const Payroll = () => {
         </div>
       )}
 
-      {/* Run Payroll Modal */}
-      {showRunPayrollModal && (
-        <div className="modal-overlay" onClick={() => setShowRunPayrollModal(false)}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+      {/* View Payslip Modal */}
+      {showViewPayslipModal && (
+        <div className="modal-overlay" onClick={handleCloseViewPayslipModal}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '90vw', width: '560px', maxHeight: '95vh' }}
+          >
             <div className="modal-header">
-              <h3 className="modal-title">Run Payroll</h3>
-              <button className="modal-close-btn" onClick={() => setShowRunPayrollModal(false)}>
+              <h3 className="modal-title">Payslip Details</h3>
+              <button className="modal-close-btn" onClick={handleCloseViewPayslipModal}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+              {viewPayslipLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '200px', gap: '12px' }}>
+                  <div className="loading-spinner" />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading payslip...</p>
+                </div>
+              ) : selectedPayslip ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{selectedPayslip.employee_name}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Employee ID: {selectedPayslip.employee_id}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Department: {selectedPayslip.department_name || '—'}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Job Title: {selectedPayslip.job_title || '—'}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}><strong>Pay date</strong> {formatDate(selectedPayslip.pay_date)}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}><strong>Pay period</strong> {selectedPayslip.pay_period}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}><strong>Payslip #</strong> {selectedPayslip.id}</div>
+                      <span style={{
+                        display: 'inline-block',
+                        marginTop: '6px',
+                        padding: '2px 8px',
+                        fontSize: '0.7rem',
+                        fontWeight: 500,
+                        borderRadius: '4px',
+                        backgroundColor: selectedPayslip.status === 'processed' ? '#d1fae5' : selectedPayslip.status === 'cancelled' ? '#fee2e2' : '#fef3c7',
+                        color: selectedPayslip.status === 'processed' ? '#065f46' : selectedPayslip.status === 'cancelled' ? '#991b1b' : '#92400e'
+                      }}>
+                        {selectedPayslip.status === 'processed' ? 'Processed' : selectedPayslip.status === 'cancelled' ? 'Cancelled' : 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ background: 'var(--sidebar-bg)', color: '#fff', fontWeight: 600, padding: '8px 12px', fontSize: '0.75rem' }}>EARNINGS</div>
+                    <div style={{ border: '1px solid var(--border-color)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', padding: '8px 12px', background: '#f3f4f6', fontSize: '0.75rem', fontWeight: 600 }}>
+                        <div>Description</div>
+                        <div style={{ textAlign: 'right' }}>Amount</div>
+                      </div>
+                      {selectedPayslip.earnings && selectedPayslip.earnings.length > 0 ? (
+                        selectedPayslip.earnings.map((earning, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', padding: '8px 12px', borderTop: '1px solid #e5e7eb', fontSize: '0.75rem' }}>
+                            <div>{earning.label}</div>
+                            <div style={{ textAlign: 'right' }}>{formatCurrency(earning.amount, earning.currency)}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>No earnings</div>
+                      )}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', padding: '8px 12px', background: '#f9fafb', fontWeight: 600, fontSize: '0.75rem', borderTop: '1px solid #e5e7eb' }}>
+                        <div>Total earnings</div>
+                        <div style={{ textAlign: 'right' }}>{formatCurrency(selectedPayslip.total_earnings, selectedPayslip.currency)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ background: 'var(--sidebar-bg)', color: '#fff', fontWeight: 600, padding: '8px 12px', fontSize: '0.75rem' }}>DEDUCTIONS</div>
+                    <div style={{ border: '1px solid var(--border-color)' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', padding: '8px 12px', background: '#f3f4f6', fontSize: '0.75rem', fontWeight: 600 }}>
+                        <div>Description</div>
+                        <div style={{ textAlign: 'right' }}>Amount</div>
+                      </div>
+                      {selectedPayslip.deductions && selectedPayslip.deductions.length > 0 ? (
+                        selectedPayslip.deductions.map((deduction, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', padding: '8px 12px', borderTop: '1px solid #e5e7eb', fontSize: '0.75rem' }}>
+                            <div>{deduction.label}</div>
+                            <div style={{ textAlign: 'right' }}>{formatCurrency(deduction.amount, deduction.currency)}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>No deductions</div>
+                      )}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', padding: '8px 12px', background: '#f9fafb', fontWeight: 600, fontSize: '0.75rem', borderTop: '1px solid #e5e7eb' }}>
+                        <div>Total deductions</div>
+                        <div style={{ textAlign: 'right' }}>{formatCurrency(selectedPayslip.total_deductions, selectedPayslip.currency)}</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ background: '#1e293b', color: '#fff', fontWeight: 600, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: '4px' }}>
+                    <span>Net pay</span>
+                    <span>{formatCurrency(selectedPayslip.net_pay, selectedPayslip.currency || 'USD')}</span>
+                  </div>
+                  {selectedPayslip.notes && (
+                    <div style={{ marginTop: '12px', padding: '12px', background: '#f9fafb', borderRadius: '4px' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 600, marginBottom: '4px' }}>Notes</div>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>{selectedPayslip.notes}</p>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+            {selectedPayslip && !viewPayslipLoading && (
+              <div className="modal-footer">
+                <button type="button" className="modal-btn modal-btn-cancel" onClick={handleCloseViewPayslipModal}>
+                  Close
+                </button>
+                <button
+                  type="button"
+                  className="modal-btn modal-btn-confirm"
+                  style={{ background: '#2563eb', color: 'white', border: 'none' }}
+                  onClick={() => { handleCloseViewPayslipModal(); navigate(`/dashboard/payroll/payslips/${selectedPayslip.id}`); }}
+                >
+                  Open full page
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payslip Modal (full form) */}
+      {showEditModal && payslipToEdit && (
+        <div className="modal-overlay" onClick={handleCloseEditModal}>
+          <div
+            className="modal-dialog"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '900px', width: '90vw', maxHeight: '95vh' }}
+          >
+            <div className="modal-header">
+              <h3 className="modal-title">Edit Payslip</h3>
+              <button className="modal-close-btn" onClick={handleCloseEditModal}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '85vh', overflowY: 'auto' }}>
+              {editFormLoading && !editForm.pay_period ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '200px', gap: '12px' }}>
+                  <div className="loading-spinner" />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Loading payslip...</p>
+                </div>
+              ) : (
+                <>
+                  {editFormError && (
+                    <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
+                      {editFormError}
+                    </div>
+                  )}
+                  <form onSubmit={(e) => { e.preventDefault(); handleSaveEditPayslip(); }} className="modal-form">
+                    <div style={{ marginBottom: '24px' }}>
+                      <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FontAwesomeIcon icon={faUsers} style={{ color: '#2563eb' }} />
+                        Employee &amp; Pay Information
+                      </h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                        <div className="form-group">
+                          <label className="form-label">Employee <span className="required">*</span></label>
+                          <select
+                            className="form-control"
+                            value={editForm.employee_id}
+                            onChange={(e) => {
+                              setEditForm({ ...editForm, employee_id: e.target.value, bank_account_id: '' });
+                              if (e.target.value) {
+                                axios.get(`${BASE_URL}/employees/${e.target.value}/bank-accounts`, { headers: authHeaders })
+                                  .then(r => setEditSelectedEmployeeBankAccounts(r.data?.data || []))
+                                  .catch(() => setEditSelectedEmployeeBankAccounts([]));
+                              } else setEditSelectedEmployeeBankAccounts([]);
+                            }}
+                            required
+                          >
+                            <option value="">Select Employee</option>
+                            {employees.map((emp) => (
+                              <option key={emp.id} value={emp.id}>{emp.name || emp.Name} - {emp.employee_id || emp.EmployeeID || emp.id}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Pay Period <span className="required">*</span></label>
+                          <input type="month" className="form-control" value={editForm.pay_period} onChange={(e) => setEditForm({ ...editForm, pay_period: e.target.value })} required />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Pay Date <span className="required">*</span></label>
+                          <input type="date" className="form-control" value={editForm.pay_date} onChange={(e) => setEditForm({ ...editForm, pay_date: e.target.value })} required />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Currency <span className="required">*</span></label>
+                          <select
+                            className="form-control"
+                            value={editForm.currency}
+                            onChange={(e) => {
+                              setEditForm({ ...editForm, currency: e.target.value });
+                              setEditEarnings(editEarnings.map(ev => ({ ...ev, currency: e.target.value })));
+                              setEditDeductions(editDeductions.map(d => ({ ...d, currency: e.target.value })));
+                            }}
+                            required
+                          >
+                            {currencies.map((c) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Payment Method <span className="required">*</span></label>
+                          <select className="form-control" value={editForm.payment_method} onChange={(e) => setEditForm({ ...editForm, payment_method: e.target.value })} required>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="cash">Cash</option>
+                          </select>
+                        </div>
+                        {editForm.payment_method === 'bank' && (
+                          <div className="form-group">
+                            <label className="form-label">Bank Account <span className="required">*</span></label>
+                            <select
+                              className="form-control"
+                              value={editForm.bank_account_id}
+                              onChange={(e) => setEditForm({ ...editForm, bank_account_id: e.target.value })}
+                              required
+                            >
+                              <option value="">Select Bank Account</option>
+                              {editSelectedEmployeeBankAccounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>{acc.bankName || acc.bank_name} - {acc.accountNumber || acc.account_number}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        <div className="form-group">
+                          <label className="form-label">Status</label>
+                          <select className="form-control" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                            <option value="pending">Pending</option>
+                            <option value="processed">Processed</option>
+                            <option value="cancelled">Cancelled</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '24px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <FontAwesomeIcon icon={faMoneyBillWave} style={{ color: '#10b981' }} /> Earnings
+                        </h4>
+                        <button type="button" onClick={addEditEarning} className="modal-btn" style={{ background: '#10b981', color: 'white', padding: '6px 12px', fontSize: '0.7rem' }}>
+                          <FontAwesomeIcon icon={faPlus} style={{ marginRight: '4px' }} /> Add Earning
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {editEarnings.map((earning) => (
+                          <div key={earning.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '12px', alignItems: 'center' }}>
+                            <input type="text" className="form-control" placeholder="Earning description" value={earning.label} onChange={(e) => updateEditEarning(earning.id, 'label', e.target.value)} />
+                            <input type="number" className="form-control" placeholder="Amount" value={earning.amount} onChange={(e) => updateEditEarning(earning.id, 'amount', e.target.value)} step="0.01" min="0" />
+                            <button type="button" onClick={() => removeEditEarning(earning.id)} disabled={editEarnings.length === 1} style={{ background: editEarnings.length === 1 ? '#e5e7eb' : '#dc2626', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: editEarnings.length === 1 ? 'not-allowed' : 'pointer', fontSize: '0.7rem' }}>
+                              <FontAwesomeIcon icon={faTrash} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '24px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <FontAwesomeIcon icon={faCalculator} style={{ color: '#dc2626' }} /> Deductions
+                        </h4>
+                        <button type="button" onClick={addEditDeduction} className="modal-btn" style={{ background: '#dc2626', color: 'white', padding: '6px 12px', fontSize: '0.7rem' }}>
+                          <FontAwesomeIcon icon={faPlus} style={{ marginRight: '4px' }} /> Add Deduction
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {editDeductions.map((deduction) => (
+                          <div key={deduction.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '12px', alignItems: 'center' }}>
+                            <input type="text" className="form-control" placeholder="Deduction description" value={deduction.label} onChange={(e) => updateEditDeduction(deduction.id, 'label', e.target.value)} />
+                            <input type="number" className="form-control" placeholder="Amount" value={deduction.amount} onChange={(e) => updateEditDeduction(deduction.id, 'amount', e.target.value)} step="0.01" min="0" />
+                            <button type="button" onClick={() => removeEditDeduction(deduction.id)} disabled={editDeductions.length === 1} style={{ background: editDeductions.length === 1 ? '#e5e7eb' : '#dc2626', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: editDeductions.length === 1 ? 'not-allowed' : 'pointer', fontSize: '0.7rem' }}>
+                              <FontAwesomeIcon icon={faTrash} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ marginBottom: '24px', padding: '16px', background: '#f3f4f6', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>Net Pay:</span>
+                        <span style={{ fontSize: '1rem', fontWeight: 700, color: '#10b981' }}>{formatCurrency(calculateEditNetPay(), editForm.currency || 'USD')}</span>
+                      </div>
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '24px' }}>
+                      <label className="form-label">Notes</label>
+                      <textarea className="form-control" rows="3" placeholder="Additional notes..." value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" onClick={handleCloseEditModal} className="modal-btn modal-btn-cancel">Cancel</button>
+                      <button type="submit" disabled={editFormLoading} className="modal-btn modal-btn-primary" style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+                        {editFormLoading ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && payslipToDelete && (
+        <div className="modal-overlay" onClick={handleCloseDeleteModal}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Delete payslip</h3>
+              <button className="modal-close-btn" onClick={handleCloseDeleteModal}>
                 <FontAwesomeIcon icon={faTimes} />
               </button>
             </div>
             <div className="modal-body">
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: '8px' }}>
+                Are you sure you want to delete this payslip? This cannot be undone.
+              </p>
+              <div style={{ padding: '12px', background: '#f9fafb', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                <div style={{ fontSize: '0.8rem' }}><strong>{payslipToDelete.employee_name}</strong></div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{payslipToDelete.pay_period} · {formatCurrency(payslipToDelete.net_pay, payslipToDelete.currency)}</div>
+              </div>
+              {payslipToDelete.status === 'processed' && (
+                <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '10px' }}>
+                  Processed payslips cannot be deleted.
+                </p>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="modal-btn modal-btn-cancel" onClick={handleCloseDeleteModal} disabled={deleteLoading}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="modal-btn modal-btn-delete"
+                onClick={handleConfirmDelete}
+                disabled={deleteLoading || payslipToDelete.status === 'processed'}
+                style={{ background: '#dc2626', color: 'white', border: 'none' }}
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Run Payroll Modal */}
+      {showRunPayrollModal && (
+        <div className="modal-overlay" onClick={() => { setShowRunPayrollModal(false); setRunPayrollError(null); }}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Run Payroll</h3>
+              <button className="modal-close-btn" onClick={() => { setShowRunPayrollModal(false); setRunPayrollError(null); }}>
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {runPayrollError && (
+                <div style={{ padding: '10px', background: '#fee2e2', color: '#dc2626', fontSize: '0.75rem', marginBottom: '16px', borderRadius: '4px' }}>
+                  {runPayrollError}
+                </div>
+              )}
               <div style={{ background: '#fef3c7', border: '1px solid #fbbf24', padding: '12px', borderRadius: '4px', marginBottom: '16px' }}>
                 <p style={{ fontSize: '0.75rem', color: '#92400e' }}>
                   <strong>Warning:</strong> This will process all pending payslips, create bank transactions, 
@@ -1253,25 +1838,10 @@ const Payroll = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Bank Account *</label>
-                  <select
-                    value={runPayrollForm.bank_account_id}
-                    onChange={(e) => setRunPayrollForm({...runPayrollForm, bank_account_id: e.target.value})}
-                    className="form-control"
-                  >
-                    <option value="">Select Bank Account</option>
-                    {bankAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} - {formatCurrency(account.balance, account.currency)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
                   <label className="form-label">Payment Method</label>
                   <select
                     value={runPayrollForm.payment_method}
-                    onChange={(e) => setRunPayrollForm({...runPayrollForm, payment_method: e.target.value})}
+                    onChange={(e) => setRunPayrollForm({...runPayrollForm, payment_method: e.target.value, bank_account_id: e.target.value === 'Cash' ? '' : runPayrollForm.bank_account_id})}
                     className="form-control"
                   >
                     <option value="Bank Transfer">Bank Transfer</option>
@@ -1279,6 +1849,23 @@ const Payroll = () => {
                     <option value="Cheque">Cheque</option>
                   </select>
                 </div>
+                {runPayrollForm.payment_method !== 'Cash' && (
+                  <div className="form-group">
+                    <label className="form-label">Bank Account *</label>
+                    <select
+                      value={runPayrollForm.bank_account_id}
+                      onChange={(e) => setRunPayrollForm({...runPayrollForm, bank_account_id: e.target.value})}
+                      className="form-control"
+                    >
+                      <option value="">Select Bank Account</option>
+                      {bankAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name} - {formatCurrency(account.balance, account.currency)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">Reference (Auto-generated)</label>
                   <input
@@ -1307,7 +1894,7 @@ const Payroll = () => {
                 <div className="modal-footer">
                   <button
                     type="button"
-                    onClick={() => setShowRunPayrollModal(false)}
+                    onClick={() => { setShowRunPayrollModal(false); setRunPayrollError(null); }}
                     className="modal-btn modal-btn-secondary"
                   >
                     Cancel
@@ -1327,45 +1914,6 @@ const Payroll = () => {
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 w-full max-w-md mx-4 rounded-lg">
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                <FontAwesomeIcon icon={faCheck} className="text-green-600 text-lg" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Payroll Processed Successfully!</h3>
-              <div className="text-sm text-gray-600 space-y-2 mb-6">
-                {successData && (
-                  <>
-                    <p><strong>Payroll Run ID:</strong> #{successData.payroll_run_id}</p>
-                    <p><strong>Payslips Processed:</strong> {successData.payslips_processed}</p>
-                    <p><strong>Total Amount:</strong> {formatCurrency(successData.total_amount, 'USD')}</p>
-                    <p><strong>Pay Period:</strong> {successData.pay_period}</p>
-                    <p><strong>Pay Date:</strong> {formatDate(successData.pay_date)}</p>
-                  </>
-                )}
-                <div className="bg-green-50 border border-green-200 p-3 rounded mt-4">
-                  <p className="text-xs text-green-800">
-                    <strong>✓</strong> Bank transactions created<br/>
-                    <strong>✓</strong> Accounting entries updated<br/>
-                    <strong>✓</strong> Account balances updated<br/>
-                    <strong>✓</strong> Payslips marked as processed
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSuccessModal(false)}
-                className="w-full bg-green-600 text-white px-4 py-2 text-sm font-medium rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-              >
-                Continue
-              </button>
             </div>
           </div>
         </div>

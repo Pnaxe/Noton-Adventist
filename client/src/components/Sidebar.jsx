@@ -131,6 +131,24 @@ const Sidebar = ({ open, setOpen }) => {
     // For items without top nav menus, let NavLink handle navigation normally
   };
 
+  // Paths that belong to Student Billing (header tabs) - keep sidebar "Student Billing" active on these
+  const billingSubPaths = [
+    '/dashboard/billing',
+    '/dashboard/students/balances',
+    '/dashboard/students/manual-balance-update',
+    '/dashboard/waivers',
+    '/dashboard/financial-records',
+    '/dashboard/invoice-structures'
+  ];
+
+  // Paths that belong to Accounting (header tabs) - keep sidebar "Accounting" active on these
+  const accountingSubPaths = [
+    '/dashboard/accounting',
+    '/dashboard/expenses',
+    '/dashboard/assets',
+    '/dashboard/reports'
+  ];
+
   const renderNavItem = (item) => {
     // Determine if this item should be active - only one at a time
     const currentPath = location.pathname.trim();
@@ -139,6 +157,25 @@ const Sidebar = ({ open, setOpen }) => {
     if (item.name === 'Dashboard') {
       // Dashboard is ONLY active when exactly on /dashboard or /dashboard/ (no sub-routes)
       shouldBeActive = (currentPath === '/dashboard' || currentPath === '/dashboard/');
+    } else if (item.name === 'Student Billing') {
+      // Student Billing stays active when on billing or any of its header-tab routes
+      const isBillingPath = billingSubPaths.some(
+        (p) => currentPath === p || currentPath.startsWith(p + '/')
+      );
+      shouldBeActive = isBillingPath;
+    } else if (item.name === 'Accounting') {
+      // Accounting stays active when on any of its header-tab routes (Chart of Accounts, Transfer, Expenses, Liabilities, Suppliers, Fixed Assets, Financial Reports)
+      const isAccountingPath = accountingSubPaths.some(
+        (p) => currentPath === p || currentPath.startsWith(p + '/')
+      );
+      shouldBeActive = isAccountingPath;
+    } else if (item.name === 'Students') {
+      // Students is active only when on student routes that are NOT billing-owned (e.g. not Outstanding Balance / Student Opening Balance)
+      const isBillingPath = billingSubPaths.some(
+        (p) => currentPath === p || currentPath.startsWith(p + '/')
+      );
+      const isOnStudentsPath = currentPath === item.href || currentPath.startsWith(item.href + '/');
+      shouldBeActive = isOnStudentsPath && !isBillingPath;
     } else {
       // For other items, check if current path matches or starts with their href
       // Make sure we're not on the base dashboard route

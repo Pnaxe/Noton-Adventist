@@ -302,7 +302,7 @@ const Payslips = () => {
     window.print();
   };
 
-  const formatCurrency = (amount, currencyCode = 'KES') => {
+  const formatCurrency = (amount, currencyCode = 'USD') => {
     // Return just "0" if amount is 0
     if (amount === 0 || amount === '0' || parseFloat(amount) === 0) {
       return '0';

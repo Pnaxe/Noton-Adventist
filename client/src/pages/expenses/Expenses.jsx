@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import BASE_URL from '../../contexts/Api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,6 +15,8 @@ const Expenses = () => {
   const [deleteLoadingId, setDeleteLoadingId] = useState(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [viewExpense, setViewExpense] = useState(null);
   const [viewLoading, setViewLoading] = useState(false);
   // Pagination, search, filters
@@ -42,6 +45,7 @@ const Expenses = () => {
   });
   const [addFormError, setAddFormError] = useState('');
   const [addFormLoading, setAddFormLoading] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [suppliers, setSuppliers] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [expenseAccounts, setExpenseAccounts] = useState([]);
@@ -181,18 +185,24 @@ const Expenses = () => {
 
     try {
       if (!addForm.amount || !addForm.currency_id || !addForm.expense_date || !addForm.payment_method || !addForm.payment_status || !addForm.expense_account_id) {
-        setAddFormError('Please fill all required fields.');
+        const errorMsg = 'Please fill all required fields.';
+        setAddFormError(errorMsg);
+        showToast(errorMsg, 'error');
         setAddFormLoading(false);
         return;
       }
 
       if (!addForm.reference_number) {
-        setAddFormError('Please add a reference number.');
+        const errorMsg = 'Please add a reference number.';
+        setAddFormError(errorMsg);
+        showToast(errorMsg, 'error');
         setAddFormLoading(false);
         return;
       }
       if (['cash', 'bank'].includes(addForm.payment_method) && !addForm.payment_account_id) {
-        setAddFormError('Please select a payment account.');
+        const errorMsg = 'Please select a payment account.';
+        setAddFormError(errorMsg);
+        showToast(errorMsg, 'error');
         setAddFormLoading(false);
         return;
       }
@@ -200,12 +210,16 @@ const Expenses = () => {
       // Validate partial payment
       if (addForm.payment_status === 'partial') {
         if (!addForm.amount_paid || parseFloat(addForm.amount_paid) <= 0) {
-          setAddFormError('Please enter the amount paid for partial payment.');
+          const errorMsg = 'Please enter the amount paid for partial payment.';
+          setAddFormError(errorMsg);
+          showToast(errorMsg, 'error');
           setAddFormLoading(false);
           return;
         }
         if (parseFloat(addForm.amount_paid) >= parseFloat(addForm.amount)) {
-          setAddFormError('Amount paid must be less than total amount for partial payment.');
+          const errorMsg = 'Amount paid must be less than total amount for partial payment.';
+          setAddFormError(errorMsg);
+          showToast(errorMsg, 'error');
           setAddFormLoading(false);
           return;
         }
@@ -223,8 +237,11 @@ const Expenses = () => {
 
       handleCloseAddModal();
       fetchExpenses();
+      showToast('Expense added successfully!', 'success');
     } catch (err) {
-      setAddFormError(err.response?.data?.message || 'Failed to save expense.');
+      const errorMsg = err.response?.data?.message || 'Failed to save expense.';
+      setAddFormError(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setAddFormLoading(false);
     }
@@ -233,14 +250,81 @@ const Expenses = () => {
   const remainingAmount = addForm.amount && addForm.amount_paid ?
     (parseFloat(addForm.amount) - parseFloat(addForm.amount_paid)).toFixed(2) : '';
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this expense?')) return;
-    setDeleteLoadingId(id);
+  // Toast notification functions
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    if (type === 'success') return '#10b981';
+    if (type === 'error') return '#ef4444';
+    return '#10b981';
+  };
+
+  const openDeleteModal = (expense) => {
+    setExpenseToDelete(expense);
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (!deleteLoadingId) {
+      setShowDeleteModal(false);
+      setExpenseToDelete(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!expenseToDelete?.id) return;
+    setDeleteLoadingId(expenseToDelete.id);
     try {
-      await axios.delete(`${BASE_URL}/expenses/expenses/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${BASE_URL}/expenses/expenses/${expenseToDelete.id}`, { headers: { Authorization: `Bearer ${token}` } });
       fetchExpenses();
+      setShowDeleteModal(false);
+      setExpenseToDelete(null);
+      showToast('Expense deleted successfully!', 'success');
     } catch (err) {
-      alert('Failed to delete expense.');
+      showToast(err.response?.data?.message || 'Failed to delete expense.', 'error');
     } finally {
       setDeleteLoadingId(null);
     }
@@ -494,7 +578,7 @@ const Expenses = () => {
                         <FontAwesomeIcon icon={faEdit} />
                       </button>
                       <button
-                        onClick={() => handleDelete(e.id)}
+                        onClick={() => openDeleteModal(e)}
                         disabled={deleteLoadingId === e.id}
                         style={{ color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer', padding: 0, opacity: deleteLoadingId === e.id ? 0.5 : 1 }}
                         title="Delete"
@@ -971,6 +1055,49 @@ const Expenses = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && expenseToDelete && (
+        <div className="modal-overlay" onClick={closeDeleteModal} role="dialog" aria-modal="true" aria-labelledby="delete-expense-title">
+          <div className="modal-dialog" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 id="delete-expense-title" className="modal-title">Delete Expense</h3>
+              <button type="button" className="modal-close-btn" onClick={closeDeleteModal} disabled={!!deleteLoadingId} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="report-subtitle" style={{ marginBottom: 0 }}>
+                Are you sure you want to delete this expense? {expenseToDelete.reference_number && <strong>{expenseToDelete.reference_number}</strong>} This action cannot be undone.
+              </p>
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '12px 16px', marginTop: '16px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" className="modal-btn modal-btn-cancel" onClick={closeDeleteModal} disabled={!!deleteLoadingId}>
+                  Cancel
+                </button>
+                <button type="button" className="modal-btn modal-btn-confirm" onClick={handleConfirmDelete} disabled={!!deleteLoadingId} style={{ background: '#dc2626' }}>
+                  {deleteLoadingId === expenseToDelete.id ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification - top right */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast" style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 2000 }}>
+          <div
+            className="success-toast-content"
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

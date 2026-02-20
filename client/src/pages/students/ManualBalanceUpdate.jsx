@@ -1,4 +1,5 @@
 import React, { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faSearch,
@@ -50,6 +51,7 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   // Live search effect with debouncing
   useEffect(() => {
@@ -256,12 +258,16 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
     e.preventDefault();
 
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      setErrorMessage('Please enter a valid amount');
+      const errorMsg = 'Please enter a valid amount';
+      setErrorMessage(errorMsg);
+      showToast(errorMsg, 'error');
       return;
     }
 
     if (!formData.description.trim()) {
-      setErrorMessage('Please enter a description for this adjustment');
+      const errorMsg = 'Please enter a description for this adjustment';
+      setErrorMessage(errorMsg);
+      showToast(errorMsg, 'error');
       return;
     }
 
@@ -282,7 +288,7 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      setSuccessMessage('Opening balance recorded successfully! This historical debt has been added to the student account.');
+      showToast('Opening balance recorded successfully! This historical debt has been added to the student account.', 'success');
 
       // Refresh student balance
       const balanceResponse = await axios.get(
@@ -306,10 +312,64 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
 
     } catch (error) {
       console.error('Error updating balance:', error);
-      setErrorMessage(error.response?.data?.error || 'Failed to update student balance');
+      const errorMsg = error.response?.data?.error || 'Failed to update student balance';
+      setErrorMessage(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Toast notification functions
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    if (type === 'success') return '#10b981';
+    if (type === 'error') return '#ef4444';
+    return '#10b981';
   };
 
   const handleClearSearch = () => {
@@ -569,25 +629,6 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
 
             <div className="modal-body">
               <form onSubmit={handleSubmit} className="modal-form">
-                {/* Success/Error Messages */}
-                {successMessage && (
-                  <div style={{ marginBottom: '16px', padding: '12px', background: '#d1fae5', border: '1px solid #6ee7b7', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#065f46' }}>
-                      <FontAwesomeIcon icon={faCheckCircle} />
-                      {successMessage}
-                    </div>
-                  </div>
-                )}
-
-                {errorMessage && (
-                  <div style={{ marginBottom: '16px', padding: '12px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem', color: '#dc2626' }}>
-                      <FontAwesomeIcon icon={faExclamationTriangle} />
-                      {errorMessage}
-                    </div>
-                  </div>
-                )}
-
                 {/* Student Search */}
                 <div className="form-group">
                   <label className="form-label">
@@ -771,6 +812,20 @@ const ManualBalanceUpdate = forwardRef((props, ref) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast">
+          <div
+            className="success-toast-content"
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

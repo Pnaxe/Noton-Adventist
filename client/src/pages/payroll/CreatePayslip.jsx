@@ -26,7 +26,7 @@ const CreatePayslip = () => {
     employee_id: '',
     pay_period: new Date().toISOString().slice(0, 7), // YYYY-MM
     pay_date: new Date().toISOString().split('T')[0],
-    currency: 'KES',
+    currency: 'USD',
     payment_method: 'bank', // 'bank' or 'cash'
     bank_account_id: '',
     notes: ''
@@ -34,11 +34,11 @@ const CreatePayslip = () => {
 
   // Dynamic earnings and deductions
   const [earnings, setEarnings] = useState([
-    { id: 1, label: 'Basic Salary', amount: '', currency: 'KES' }
+    { id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }
   ]);
   
   const [deductions, setDeductions] = useState([
-    { id: 1, label: 'PAYE Tax', amount: '', currency: 'KES' }
+    { id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }
   ]);
 
   const [employees, setEmployees] = useState([]);
@@ -48,7 +48,7 @@ const CreatePayslip = () => {
   const [newBankAccount, setNewBankAccount] = useState({
     bank_name: '',
     account_number: '',
-    currency: 'KES'
+    currency: 'USD'
   });
 
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
@@ -161,7 +161,7 @@ const CreatePayslip = () => {
         setNewBankAccount({
           bank_name: '',
           account_number: '',
-          currency: 'KES'
+          currency: 'USD'
         });
         setShowAddBankAccount(false);
         setSuccess('Bank account added successfully!');
@@ -188,7 +188,7 @@ const CreatePayslip = () => {
 
   const addEarning = () => {
     const newId = Math.max(...earnings.map(e => e.id), 0) + 1;
-    setEarnings([...earnings, { id: newId, label: '', amount: '', currency: 'KES' }]);
+    setEarnings([...earnings, { id: newId, label: '', amount: '', currency: 'USD' }]);
   };
 
   const removeEarning = (id) => {
@@ -205,7 +205,7 @@ const CreatePayslip = () => {
 
   const addDeduction = () => {
     const newId = Math.max(...deductions.map(d => d.id), 0) + 1;
-    setDeductions([...deductions, { id: newId, label: '', amount: '', currency: 'KES' }]);
+    setDeductions([...deductions, { id: newId, label: '', amount: '', currency: 'USD' }]);
   };
 
   const removeDeduction = (id) => {
@@ -266,7 +266,7 @@ const CreatePayslip = () => {
           employee_id: '',
           pay_period: new Date().toISOString().slice(0, 7),
           pay_date: new Date().toISOString().split('T')[0],
-          currency: 'KES',
+          currency: 'USD',
           payment_method: 'bank',
           bank_account_id: '',
           notes: ''
@@ -276,10 +276,10 @@ const CreatePayslip = () => {
         setNewBankAccount({
           bank_name: '',
           account_number: '',
-          currency: 'KES'
+          currency: 'USD'
         });
-        setEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'KES' }]);
-        setDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'KES' }]);
+        setEarnings([{ id: 1, label: 'Basic Salary', amount: '', currency: 'USD' }]);
+        setDeductions([{ id: 1, label: 'PAYE Tax', amount: '', currency: 'USD' }]);
 
         // Redirect after 2 seconds
         setTimeout(() => {

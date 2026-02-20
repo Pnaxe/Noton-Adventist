@@ -15,6 +15,9 @@ router.get('/', PayslipController.getPayslips);
 // Get payslip by ID
 router.get('/:id', PayslipController.getPayslipById);
 
+// Update full payslip
+router.put('/:id', PayslipController.updatePayslip);
+
 // Update payslip status
 router.patch('/:id/status', PayslipController.updatePayslipStatus);
 

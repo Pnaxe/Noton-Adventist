@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faUser,
@@ -73,7 +74,7 @@ const AddEmployee = () => {
 
     } catch (err) {
       console.error('Error fetching dropdown data:', err);
-      setError('Failed to load form data');
+      showToast('Failed to load form data', 'error');
     }
   };
 
@@ -176,7 +177,6 @@ const AddEmployee = () => {
       });
 
       if (response.data.success) {
-        setShowSuccessModal(true);
         // Reset form
         setFormData({
           employeeId: '',
@@ -193,32 +193,67 @@ const AddEmployee = () => {
         setBankAccounts([
           { bankName: '', accountNumber: '', currency: '', isPrimary: true }
         ]);
+        showToast('Employee created successfully!', 'success');
       }
     } catch (err) {
       console.error('Error creating employee:', err);
-      
-      if (err.response?.data?.errorType && err.response?.data?.field) {
-        setErrorDetails({
-          type: err.response.data.errorType,
-          field: err.response.data.field,
-          message: err.response.data.error
-        });
-        setShowErrorModal(true);
-      } else {
-        setError(err.response?.data?.error || 'Failed to create employee');
-      }
+      const errorMessage = err.response?.data?.error || 'Failed to create employee';
+      showToast(errorMessage, 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const closeSuccessModal = () => {
-    setShowSuccessModal(false);
+  // Toast notification functions
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast(prev => ({ ...prev, visible: false }));
+        setTimeout(() => {
+          setToast({ message: null, type: 'success', visible: false });
+        }, 300);
+      }, duration);
+    }
   };
 
-  const closeErrorModal = () => {
-    setShowErrorModal(false);
-    setErrorDetails({});
+  const getToastIcon = (type) => {
+    const iconProps = {
+      width: "20",
+      height: "20",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round"
+    };
+
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    if (type === 'success') return '#10b981';
+    if (type === 'error') return '#ef4444';
+    return '#10b981';
   };
 
   return (
@@ -230,13 +265,6 @@ const AddEmployee = () => {
           Create a new employee record with personal and banking information
         </p>
       </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 p-3">
-          <div className="text-xs text-red-600">{error}</div>
-        </div>
-      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -565,50 +593,18 @@ const AddEmployee = () => {
         </div>
       </form>
 
-      {/* Success Modal */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 bg-white">
-            <div className="mt-3 text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 bg-green-100 mb-4">
-                <FontAwesomeIcon icon={faCheck} className="h-6 w-6 text-green-600" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Employee Created Successfully</h3>
-              <p className="text-xs text-gray-500 mb-4">
-                The employee has been added to the system successfully.
-              </p>
-              <button
-                onClick={closeSuccessModal}
-                className="px-4 py-2 bg-gray-700 text-white text-xs hover:bg-gray-800"
-              >
-                Continue
-              </button>
-            </div>
+      {/* Toast Notification */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast">
+          <div
+            className="success-toast-content"
+            style={{ background: getToastBackgroundColor(toast.type) }}
+          >
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
           </div>
-        </div>
-      )}
-
-      {/* Error Modal */}
-      {showErrorModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 bg-white">
-            <div className="mt-3 text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 bg-red-100 mb-4">
-                <FontAwesomeIcon icon={faExclamationTriangle} className="h-6 w-6 text-red-600" />
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Error Creating Employee</h3>
-              <p className="text-xs text-gray-500 mb-4">
-                {errorDetails.message}
-              </p>
-              <button
-                onClick={closeErrorModal}
-                className="px-4 py-2 bg-red-600 text-white text-xs hover:bg-red-700"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

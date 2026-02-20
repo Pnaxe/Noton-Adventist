@@ -31,6 +31,7 @@ import {
   faSchool,
   faCalendarCheck,
   faChevronDown,
+  faExchangeAlt,
   faEye,
   faEyeSlash,
   faTimes
@@ -149,7 +150,9 @@ const Header = ({ onMenuClick }) => {
   // Set active accounting tab based on current route
   useEffect(() => {
     if (isAccountingPage && onAccountingTabChange) {
-      if (location.pathname.startsWith('/dashboard/accounting')) {
+      if (location.pathname.startsWith('/dashboard/accounting/cash-bank')) {
+        onAccountingTabChange('transfer');
+      } else if (location.pathname.startsWith('/dashboard/accounting')) {
         onAccountingTabChange('chart-of-accounts');
       } else if (location.pathname.startsWith('/dashboard/expenses')) {
         onAccountingTabChange('expenses');
@@ -219,6 +222,9 @@ const Header = ({ onMenuClick }) => {
 
   // Determine active accounting tab from route (for display)
   const getActiveAccountingTab = () => {
+    if (location.pathname.startsWith('/dashboard/accounting/cash-bank')) {
+      return 'transfer';
+    }
     if (location.pathname.startsWith('/dashboard/accounting')) {
       return 'chart-of-accounts';
     } else if (location.pathname.startsWith('/dashboard/expenses')) {
@@ -671,6 +677,7 @@ const Header = ({ onMenuClick }) => {
         {isAccountingPage && (() => {
           const accountingTabs = [
             { id: 'chart-of-accounts', label: 'Chart of Accounts', icon: faMoneyBillWave, path: '/dashboard/accounting/chart-of-accounts' },
+            { id: 'transfer', label: 'Transfer', icon: faExchangeAlt, path: '/dashboard/accounting/cash-bank' },
             { id: 'expenses', label: 'Expenses', icon: faShoppingCart, path: '/dashboard/expenses/expenses' },
             { id: 'liabilities', label: 'Liabilities', icon: faBalanceScale, path: '/dashboard/expenses/accounts-payable' },
             { id: 'suppliers', label: 'Suppliers', icon: faUserPlus, path: '/dashboard/expenses/suppliers' },
@@ -1274,6 +1281,7 @@ const Header = ({ onMenuClick }) => {
                     }
                     const paths = {
                       'chart-of-accounts': '/dashboard/accounting/chart-of-accounts',
+                      transfer: '/dashboard/accounting/cash-bank',
                       expenses: '/dashboard/expenses/expenses',
                       liabilities: '/dashboard/expenses/accounts-payable',
                       suppliers: '/dashboard/expenses/suppliers',
@@ -1284,6 +1292,7 @@ const Header = ({ onMenuClick }) => {
                   }}
                 >
                   <option value="chart-of-accounts">Chart of Accounts</option>
+                  <option value="transfer">Transfer</option>
                   <option value="expenses">Expenses</option>
                   <option value="liabilities">Liabilities</option>
                   <option value="suppliers">Suppliers</option>

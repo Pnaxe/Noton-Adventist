@@ -25,4 +25,13 @@ router.get('/:payable_id/payments', expenseAccountPayablesController.getPaymentH
 // Make a payment against accounts payable
 router.post('/:payable_id/pay', expenseAccountPayablesController.makePayment);
 
+// Reverse a payment
+router.post('/:payable_id/payments/:payment_id/reverse', expenseAccountPayablesController.reversePayment);
+
+// Update accounts payable
+router.put('/:id', expenseAccountPayablesController.updateAccountsPayable);
+
+// Delete accounts payable
+router.delete('/:id', expenseAccountPayablesController.deleteAccountsPayable);
+
 module.exports = router;

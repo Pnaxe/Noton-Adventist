@@ -7,7 +7,8 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faFileAlt,
   faDollarSign,
-  faEye
+  faEye,
+  faSearch
 } from '@fortawesome/free-solid-svg-icons';
 
 const ACCOUNT_TYPES = ['Asset', 'Liability', 'Equity', 'Revenue', 'Expense'];
@@ -69,6 +70,8 @@ const ChartOfAccounts = () => {
   const [addError, setAddError] = useState('');
   const [openingBalanceError, setOpeningBalanceError] = useState('');
   const [success, setSuccess] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
 
   useEffect(() => {
     fetchAccounts();
@@ -310,6 +313,14 @@ const ChartOfAccounts = () => {
     return `${currencySymbol}${parseFloat(amount || 0).toFixed(2)}`;
   };
 
+  const filteredAccounts = accounts.filter((acc) => {
+    const matchSearch = !searchTerm || [acc.code, acc.name, (acc.type || '')].some(
+      (v) => String(v).toLowerCase().includes(searchTerm.trim().toLowerCase())
+    );
+    const matchType = !typeFilter || acc.type === typeFilter;
+    return matchSearch && matchType;
+  });
+
   return (
     <div className="reports-container" style={{
       height: '100%',
@@ -345,6 +356,56 @@ const ChartOfAccounts = () => {
           {success}
         </div>
       )}
+
+      {/* Search / Filter Container */}
+      <div className="report-filters" style={{ flexShrink: 0, padding: '12px 24px', borderBottom: '1px solid var(--border-color, #e5e7eb)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+        <div className="report-filters-left" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div className="filter-group" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <FontAwesomeIcon icon={faSearch} className="search-icon" style={{ position: 'absolute', left: 12, color: 'var(--text-secondary)', fontSize: '0.875rem' }} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by code or name..."
+              className="filter-input search-input"
+              style={{ paddingLeft: 36, minWidth: 220 }}
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{ position: 'absolute', right: 8, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '1rem' }}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <div className="filter-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label className="filter-label" style={{ marginRight: 4 }}>Type:</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="filter-input"
+              style={{ minWidth: 140 }}
+            >
+              <option value="">All types</option>
+              {ACCOUNT_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            {typeFilter && (
+              <button
+                type="button"
+                onClick={() => setTypeFilter('')}
+                style={{ padding: '6px 10px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: 4, cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text-secondary)' }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Add Account Modal */}
       {showAddModal && (
@@ -524,7 +585,7 @@ const ChartOfAccounts = () => {
               </tr>
             </thead>
             <tbody>
-              {accounts.map((acc, index) => (
+              {filteredAccounts.map((acc, index) => (
                 <tr
                   key={acc.id}
                   style={{
@@ -576,7 +637,7 @@ const ChartOfAccounts = () => {
                 </tr>
               ))}
               {/* Empty placeholder rows to always show 25 rows */}
-              {Array.from({ length: Math.max(0, 25 - accounts.length) }).map((_, index) => (
+              {Array.from({ length: Math.max(0, 25 - filteredAccounts.length) }).map((_, index) => (
                 <tr
                   key={`empty-${index}`}
                   style={{

@@ -507,13 +507,7 @@ class BankAccountController {
     try {
       const currencies = [
         { code: 'USD', name: 'US Dollar', symbol: '$' },
-        { code: 'EUR', name: 'Euro', symbol: '€' },
-        { code: 'GBP', name: 'British Pound', symbol: '£' },
-        { code: 'CAD', name: 'Canadian Dollar', symbol: 'C$' },
-        { code: 'AUD', name: 'Australian Dollar', symbol: 'A$' },
-        { code: 'ZAR', name: 'South African Rand', symbol: 'R' },
-        { code: 'KES', name: 'Kenyan Shilling', symbol: 'KSh' },
-        { code: 'NGN', name: 'Nigerian Naira', symbol: '₦' }
+        { code: 'ZWL', name: 'Zimbabwean Dollar', symbol: 'Z$' }
       ];
 
       res.json({

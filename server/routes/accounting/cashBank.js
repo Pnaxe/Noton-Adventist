@@ -18,5 +18,10 @@ router.post('/bank/withdrawal', authenticateToken, requireRole(['admin', 'ACCOUN
 router.post('/transfer/cash-to-bank', authenticateToken, requireRole(['admin', 'ACCOUNTING_MANAGEMENT']), CashBankController.recordCashToBankTransfer);
 router.post('/transfer/bank-to-cash', authenticateToken, requireRole(['admin', 'ACCOUNTING_MANAGEMENT']), CashBankController.recordBankToCashTransfer);
 
+// Journal entry edit/delete (for transaction list in view account)
+router.get('/journal-entries/:id', authenticateToken, CashBankController.getJournalEntryById);
+router.put('/journal-entries/:id', authenticateToken, requireRole(['admin', 'ACCOUNTING_MANAGEMENT']), CashBankController.updateJournalEntry);
+router.delete('/journal-entries/:id', authenticateToken, requireRole(['admin', 'ACCOUNTING_MANAGEMENT']), CashBankController.deleteJournalEntry);
+
 module.exports = router;
 

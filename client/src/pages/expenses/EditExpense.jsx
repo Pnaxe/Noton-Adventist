@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import BASE_URL from '../../contexts/Api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,6 +12,7 @@ const EditExpense = () => {
   const [form, setForm] = useState({ supplier_id: '', amount: '', currency_id: '', expense_date: '', description: '', payment_method: 'cash', payment_status: 'full', payment_account_id: '', expense_account_id: '' });
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
   const [suppliers, setSuppliers] = useState([]);
   const [currencies, setCurrencies] = useState([]);
   const [defaultExpenseAccount, setDefaultExpenseAccount] = useState(null);
@@ -75,6 +77,44 @@ const EditExpense = () => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const showToast = (message, type = 'success', duration = 3000) => {
+    setToast({ message, type, visible: true });
+    if (duration > 0) {
+      setTimeout(() => {
+        setToast((prev) => ({ ...prev, visible: false }));
+        setTimeout(() => setToast({ message: null, type: 'success', visible: false }), 300);
+      }, duration);
+    }
+  };
+
+  const getToastIcon = (type) => {
+    const iconProps = { width: '20', height: '20', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: '2', strokeLinecap: 'round', strokeLinejoin: 'round' };
+    if (type === 'success') {
+      return (
+        <svg {...iconProps}>
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        </svg>
+      );
+    }
+    if (type === 'error') {
+      return (
+        <svg {...iconProps}>
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      );
+    }
+    return null;
+  };
+
+  const getToastBackgroundColor = (type) => {
+    if (type === 'success') return '#10b981';
+    if (type === 'error') return '#ef4444';
+    return '#10b981';
+  };
+
   const getPaymentAccountOptions = (method) => {
     if (!method || chartAccounts.length === 0) return [];
     const isCash = method === 'cash';
@@ -112,9 +152,12 @@ const EditExpense = () => {
         payment_account_id: form.payment_account_id || null,
         expense_account_id: form.expense_account_id || defaultExpenseAccount?.id || null
       }, { headers: { Authorization: `Bearer ${token}` } });
-      navigate('/dashboard/expenses/expenses');
+      showToast('Expense updated successfully.', 'success');
+      setTimeout(() => navigate('/dashboard/expenses/expenses'), 1200);
     } catch (err) {
-      setFormError('Failed to update expense.');
+      const msg = err.response?.data?.message || 'Failed to update expense.';
+      setFormError(msg);
+      showToast(msg, 'error');
     } finally {
       setFormLoading(false);
     }
@@ -235,6 +278,17 @@ const EditExpense = () => {
         </div>
         </form>
       </div>
+
+      {/* Toast - top right */}
+      {toast.visible && toast.message && createPortal(
+        <div className="success-toast" style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 2000 }}>
+          <div className="success-toast-content" style={{ background: getToastBackgroundColor(toast.type) }}>
+            {getToastIcon(toast.type)}
+            <span>{toast.message}</span>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

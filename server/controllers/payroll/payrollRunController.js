@@ -10,19 +10,29 @@ class PayrollRunController {
       const {
         pay_period,
         pay_date,
-        bank_account_id,
+        bank_account_id: bankAccountIdRaw,
         payment_method,
         reference,
         notes
       } = req.body;
 
       const created_by = req.user.id;
+      const isCash = payment_method === 'Cash';
+      const bank_account_id = isCash || bankAccountIdRaw == null || bankAccountIdRaw === ''
+        ? null
+        : (typeof bankAccountIdRaw === 'number' ? bankAccountIdRaw : parseInt(bankAccountIdRaw, 10));
 
-      // Validate required fields
-      if (!pay_period || !pay_date || !bank_account_id) {
+      // Validate required fields (bank account only required when not paying by cash)
+      if (!pay_period || !pay_date) {
         return res.status(400).json({
           success: false,
-          message: 'Pay period, pay date, and bank account are required'
+          message: 'Pay period and pay date are required'
+        });
+      }
+      if (!isCash && (bank_account_id == null || isNaN(bank_account_id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Bank account is required when payment method is not Cash'
         });
       }
 
@@ -72,8 +82,8 @@ class PayrollRunController {
           [payrollRunId, payslip.id, payslip.net_pay, payslip.currency]
         );
 
-        // Create bank transaction for salary payment (only for bank transfers)
-        if (payslip.payment_method === 'bank') {
+        // Create bank transaction for salary payment (only for bank transfers when run has a bank account)
+        if (payslip.payment_method === 'bank' && bank_account_id != null) {
           await connection.execute(
             `INSERT INTO bank_transactions (
               bank_account_id, transaction_type, amount, currency,
@@ -147,73 +157,123 @@ class PayrollRunController {
   // Create journal entries for payroll
   static async createPayrollJournalEntries(connection, payslip, bankAccountId, payDate, reference, createdBy) {
     try {
-      // Get or create journal entry
+      // Resolve journal_id (prefer Bank Payments Journal id=5 or by name, else any journal; create if none)
+      let journalId = 5;
+      const [journalById] = await connection.execute('SELECT id FROM journals WHERE id = ? LIMIT 1', [journalId]);
+      if (journalById.length === 0) {
+        const [journalByName] = await connection.execute(
+          "SELECT id FROM journals WHERE name IN ('Bank Payments Journal', 'General Journal') LIMIT 1"
+        );
+        if (journalByName.length > 0) {
+          journalId = journalByName[0].id;
+        } else {
+          const [anyJournal] = await connection.execute('SELECT id FROM journals LIMIT 1');
+          if (anyJournal.length > 0) {
+            journalId = anyJournal[0].id;
+          } else {
+            const [createResult] = await connection.execute(
+              "INSERT INTO journals (name, description, is_active) VALUES ('Payroll Journal', 'Payroll and salary entries', 1)"
+            );
+            journalId = createResult.insertId;
+          }
+        }
+      }
+
       const [journalResult] = await connection.execute(
         `INSERT INTO journal_entries (
           journal_id, entry_date, reference, description, created_by
         ) VALUES (?, ?, ?, ?, ?)`,
-        [5, payDate, reference || `PAY-${payslip.pay_period}`, `Payroll - ${payslip.employee_name}`, createdBy]
+        [journalId, payDate, reference || `PAY-${payslip.pay_period}`, `Payroll - ${payslip.employee_name}`, createdBy]
       );
 
       const journalEntryId = journalResult.insertId;
 
-      // Get account IDs (you'll need to set up these accounts in your chart of accounts)
-      const [salaryExpenseAccount] = await connection.execute(
-        "SELECT id FROM chart_of_accounts WHERE code = '5001' AND name LIKE '%Salary%' LIMIT 1"
+      // Resolve COA account: prefer by code/name, fallback to first account of given type so payroll always affects accounting
+      const getAccountId = async (preferredQuery, preferredParams, fallbackType) => {
+        const [preferred] = await connection.execute(preferredQuery, preferredParams || []);
+        if (preferred.length > 0) return preferred[0].id;
+        if (fallbackType) {
+          const [fallback] = await connection.execute(
+            'SELECT id FROM chart_of_accounts WHERE type = ? AND is_active = 1 LIMIT 1',
+            [fallbackType]
+          );
+          if (fallback.length > 0) return fallback[0].id;
+        }
+        return null;
+      };
+
+      const salaryAccountId = await getAccountId(
+        "SELECT id FROM chart_of_accounts WHERE (code = '5001' OR name LIKE '%Salary%') AND is_active = 1 LIMIT 1",
+        [],
+        'Expense'
+      );
+      const payeAccountId = await getAccountId(
+        "SELECT id FROM chart_of_accounts WHERE (code = '2201' OR name LIKE '%PAYE%') AND is_active = 1 LIMIT 1",
+        [],
+        'Liability'
+      );
+      const nhifAccountId = await getAccountId(
+        "SELECT id FROM chart_of_accounts WHERE (code = '2202' OR name LIKE '%NHIF%') AND is_active = 1 LIMIT 1",
+        [],
+        'Liability'
+      );
+      const nssfAccountId = await getAccountId(
+        "SELECT id FROM chart_of_accounts WHERE (code = '2203' OR name LIKE '%NSSF%') AND is_active = 1 LIMIT 1",
+        [],
+        'Liability'
+      );
+      const cashAccountId = await getAccountId(
+        "SELECT id FROM chart_of_accounts WHERE (code = '1001' OR name LIKE '%Cash%') AND is_active = 1 LIMIT 1",
+        [],
+        'Asset'
       );
 
-      const [payeAccount] = await connection.execute(
-        "SELECT id FROM chart_of_accounts WHERE code = '2201' AND name LIKE '%PAYE%' LIMIT 1"
-      );
-
-      const [nhifAccount] = await connection.execute(
-        "SELECT id FROM chart_of_accounts WHERE code = '2202' AND name LIKE '%NHIF%' LIMIT 1"
-      );
-
-      const [nssfAccount] = await connection.execute(
-        "SELECT id FROM chart_of_accounts WHERE code = '2203' AND name LIKE '%NSSF%' LIMIT 1"
-      );
-
-      // Create journal entry lines
+      // Create journal entry lines (always post at least salary debit and bank/cash credit so accounting is affected)
       const entries = [];
 
       // Debit: Salary Expense
-      if (salaryExpenseAccount.length > 0) {
+      if (salaryAccountId && payslip.total_earnings > 0) {
         entries.push({
-          account_id: salaryExpenseAccount[0].id,
+          account_id: salaryAccountId,
           debit: payslip.total_earnings,
           credit: 0,
           description: `Salary expense - ${payslip.employee_name}`
         });
       }
 
-      // Credit: Bank Account (for bank transfers) or Cash Account (for cash payments)
-      if (payslip.payment_method === 'bank') {
-        entries.push({
-          account_id: bankAccountId,
-          debit: 0,
-          credit: payslip.net_pay,
-          description: `Salary payment - ${payslip.employee_name}`
-        });
-      } else {
-        // For cash payments, credit cash account
-        const [cashAccount] = await connection.execute(
-          "SELECT id FROM chart_of_accounts WHERE code = '1001' AND name LIKE '%Cash%' LIMIT 1"
+      // Credit: Bank or Cash
+      const useBank = payslip.payment_method === 'bank' && bankAccountId != null && !isNaN(bankAccountId);
+      if (useBank) {
+        const [bankExists] = await connection.execute(
+          'SELECT id FROM chart_of_accounts WHERE id = ? LIMIT 1',
+          [bankAccountId]
         );
-        
-        if (cashAccount.length > 0) {
+        if (bankExists.length > 0) {
           entries.push({
-            account_id: cashAccount[0].id,
+            account_id: bankAccountId,
             debit: 0,
             credit: payslip.net_pay,
-            description: `Cash salary payment - ${payslip.employee_name}`
+            description: `Salary payment - ${payslip.employee_name}`
+          });
+        } else if (cashAccountId) {
+          entries.push({
+            account_id: cashAccountId,
+            debit: 0,
+            credit: payslip.net_pay,
+            description: `Salary payment - ${payslip.employee_name}`
           });
         }
+      } else if (cashAccountId) {
+        entries.push({
+          account_id: cashAccountId,
+          debit: 0,
+          credit: payslip.net_pay,
+          description: `Cash salary payment - ${payslip.employee_name}`
+        });
       }
 
       // Credit: Tax Liabilities (if deductions exist)
       if (payslip.total_deductions > 0) {
-        // Get deductions from payslip_deductions table
         const [deductions] = await connection.execute(
           'SELECT * FROM payslip_deductions WHERE payslip_id = ?',
           [payslip.id]
@@ -221,15 +281,11 @@ class PayrollRunController {
 
         for (const deduction of deductions) {
           let accountId = null;
-
-          // Map deduction labels to accounts
-          if (deduction.label.toLowerCase().includes('paye')) {
-            accountId = payeAccount.length > 0 ? payeAccount[0].id : null;
-          } else if (deduction.label.toLowerCase().includes('nhif')) {
-            accountId = nhifAccount.length > 0 ? nhifAccount[0].id : null;
-          } else if (deduction.label.toLowerCase().includes('nssf')) {
-            accountId = nssfAccount.length > 0 ? nssfAccount[0].id : null;
-          }
+          const label = (deduction.label || '').toLowerCase();
+          if (label.includes('paye')) accountId = payeAccountId;
+          else if (label.includes('nhif')) accountId = nhifAccountId;
+          else if (label.includes('nssf')) accountId = nssfAccountId;
+          if (!accountId) accountId = payeAccountId || nhifAccountId || nssfAccountId;
 
           if (accountId) {
             entries.push({

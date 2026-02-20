@@ -357,12 +357,12 @@ const BankReconciliation = () => {
                   <td className="px-4 py-2 text-xs text-gray-900">{transaction.description}</td>
                   <td className="px-4 py-2 text-xs text-gray-900">{transaction.reference}</td>
                   <td className="px-4 py-2 text-xs text-gray-900">
-                    {transaction.debit > 0 ? `KES ${transaction.debit.toLocaleString()}` : '-'}
+                    {transaction.debit > 0 ? `USD ${transaction.debit.toLocaleString()}` : '-'}
                   </td>
                   <td className="px-4 py-2 text-xs text-gray-900">
-                    {transaction.credit > 0 ? `KES ${transaction.credit.toLocaleString()}` : '-'}
+                    {transaction.credit > 0 ? `USD ${transaction.credit.toLocaleString()}` : '-'}
                   </td>
-                  <td className="px-4 py-2 text-xs text-gray-900">KES {transaction.balance.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-xs text-gray-900">USD {transaction.balance.toLocaleString()}</td>
                   <td className="px-4 py-2">
                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                       transaction.status === 'reconciled' 
@@ -413,7 +413,7 @@ const BankReconciliation = () => {
                   <td className="px-4 py-2 text-xs text-gray-900">{transaction.date}</td>
                   <td className="px-4 py-2 text-xs text-gray-900">{transaction.description}</td>
                   <td className="px-4 py-2 text-xs text-gray-900">{transaction.reference}</td>
-                  <td className="px-4 py-2 text-xs text-gray-900">KES {transaction.amount.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-xs text-gray-900">USD {transaction.amount.toLocaleString()}</td>
                   <td className="px-4 py-2">
                     <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                       transaction.type === 'credit' 
@@ -565,8 +565,8 @@ const BankReconciliation = () => {
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Amount</label>
                 <p className="text-xs text-gray-900">
-                  {selectedTransaction.debit > 0 ? `KES ${selectedTransaction.debit.toLocaleString()}` : 
-                   selectedTransaction.credit > 0 ? `KES ${selectedTransaction.credit.toLocaleString()}` : '-'}
+                  {selectedTransaction.debit > 0 ? `USD ${selectedTransaction.debit.toLocaleString()}` : 
+                   selectedTransaction.credit > 0 ? `USD ${selectedTransaction.credit.toLocaleString()}` : '-'}
                 </p>
               </div>
               <div>

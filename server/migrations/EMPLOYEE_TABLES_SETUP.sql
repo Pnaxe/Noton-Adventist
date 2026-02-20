@@ -115,12 +115,8 @@ INSERT IGNORE INTO job_titles (title, description) VALUES
 -- Common currencies that can be used in the system
 -- USD - US Dollar
 -- EUR - Euro
--- GBP - British Pound
--- CAD - Canadian Dollar
--- AUD - Australian Dollar
--- ZAR - South African Rand
--- KES - Kenyan Shilling
--- NGN - Nigerian Naira
+-- USD - US Dollar (default)
+-- ZWL - Zimbabwean Dollar
 
 -- ==========================================
 -- TRIGGERS (Optional - for audit trail)
